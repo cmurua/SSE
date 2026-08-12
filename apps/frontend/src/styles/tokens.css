@@ -1,0 +1,19 @@
+/* Portado literal de las CSS custom properties de SSE.html (prototipo
+   Claude Design): paleta institucional verde + acentos. */
+:root {
+  --green-900: #1f3a30;
+  --green-800: #294a3c;
+  --green-700: #335a48;
+  --ink: #111315;
+  --ink-2: #2a2d31;
+  --line: #e3e5e8;
+  --line-2: #d3d6db;
+  --bg: #f3f4f5;
+  --bg-2: #eaecee;
+  --muted: #6c7176;
+  --accent: #2f6fb5;
+  --accent-soft: #cfdff2;
+  --good: #2e7d4f;
+  --bad: #b3261e;
+  --warn: #b27a13;
+}

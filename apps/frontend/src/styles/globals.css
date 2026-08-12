@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "./tokens.css";
+
+/* TODO: portar .card, .field, .btn-dark, .navlink, etc. desde SSE.html */

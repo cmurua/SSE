@@ -1,0 +1,141 @@
+// Centralised string dictionary — swap to i18n later.
+const LABELS = {
+  appName: "SSE",
+  appLong: "Sistema de Soporte a la Enseñanza",
+  reactor: "Reactor Nuclear RA-0",
+  institution: "Universidad Nacional de Córdoba",
+  faculty: "Facultad de Ciencias Exactas, Físicas y Naturales",
+
+  nav: {
+    home: "Inicio",
+    realtime: "Tiempo Real",
+    histories: "Históricos",
+    suggestions: "Sugerencias",
+    help: "Ayuda",
+    about: "Conozca el RA-0",
+    logout: "Cerrar sesión",
+    welcome: "Bienvenido",
+    role: "Rol",
+  },
+
+  login: {
+    title: "Iniciar sesión",
+    subtitle: "Acceso al Sistema de Soporte a la Enseñanza",
+    user: "Nombre de usuario",
+    userPh: "Ingrese su correo institucional",
+    pass: "Contraseña",
+    passPh: "Ingrese su contraseña",
+    lang: "Idioma",
+    submit: "Iniciar sesión",
+    error: "Credenciales inválidas. Verifique usuario y contraseña.",
+    hint: "Demo: cualquier usuario y contraseña inician sesión.",
+    secure: "Conexión institucional UNC · acceso únicamente con fines educativos",
+  },
+
+  home: {
+    heroTitle: "Sistema de soporte a la enseñanza",
+    heroSubtitle: "Reactor nuclear RA-0",
+    heroLead: "Visualización de variables operativas con fines educativos y de capacitación. Sistema de solo lectura.",
+    cards: {
+      realtime: { t: "Operación en tiempo real", d: "Variables del reactor en vivo cuando SERMO está activo." },
+      histories: { t: "Consultar históricos", d: "Operaciones pasadas filtradas por fecha o ID." },
+      help: { t: "Ayuda", d: "Manual de usuario y guía paso a paso." },
+      suggestions: { t: "Sugerencias y reportes", d: "Enviar sugerencias o reportar errores." },
+      about: { t: "Conozca el RA-0", d: "Información del reactor de investigación." },
+    }
+  },
+
+  realtime: {
+    title: "Operación en tiempo real",
+    statusOp: "OPERACIÓN",
+    statusOff: "NO OPERATIVO",
+    sermoOn: "SERMO activo",
+    sermoOff: "SERMO inactivo",
+    notAvailable: "Tiempo real no disponible",
+    notAvailableLead: "El reactor no está en modo OPERACIÓN. La adquisición en vivo está pausada.",
+    goHistories: "Ir a históricos",
+    chooseVariables: "Variables a graficar",
+    chooseVarsHint: "Seleccione hasta 2 variables.",
+    mode: "Modo de gráfico",
+    modeTime: "Variable vs Tiempo",
+    modeXY: "Variable vs Variable",
+    export: "Exportar PNG",
+    lastUpdate: "Última actualización",
+    instant: "Valor instantáneo",
+    sampleRate: "Frecuencia",
+    sampleRateValue: "1 Hz",
+    operationId: "ID Operación",
+    sessionStart: "Inicio sesión",
+    duration: "Duración",
+  },
+
+  histories: {
+    title: "Consultar históricos",
+    listTitle: "Listado de operaciones",
+    detailPrefix: "Operación",
+    filters: "Criterios de búsqueda",
+    from: "Desde",
+    to: "Hasta",
+    operationId: "ID de operación",
+    apply: "Aplicar filtros",
+    clear: "Limpiar",
+    open: "Ir a la operación",
+    empty: "No hay operaciones que coincidan con los filtros.",
+    duration: "Duración",
+    samples: "Muestras",
+    operator: "Operador",
+    page: "Página",
+    of: "de",
+  },
+
+  suggestions: {
+    title: "Sugerencias y reportes de error",
+    name: "Nombre",
+    namePh: "Ingrese su nombre",
+    email: "Email",
+    emailPh: "Ingrese su correo electrónico",
+    type: "Tipo de reporte",
+    typeError: "Reporte de error",
+    typeSuggestion: "Sugerencia",
+    subject: "Asunto",
+    subjectPh: "Resumen breve",
+    message: "Mensaje",
+    messagePh: "Describa la sugerencia o el error en detalle…",
+    submit: "Enviar",
+    success: "Mensaje enviado correctamente.",
+    successLead: "Gracias por colaborar con la mejora del sistema. El equipo del SSE recibió su reporte.",
+    another: "Enviar otro",
+    severity: "Severidad",
+    severityLow: "Baja",
+    severityMed: "Media",
+    severityHigh: "Alta",
+  },
+
+  help: {
+    title: "Guía de ayuda",
+    tabs: {
+      intro: "Introducción",
+      realtime: "Tiempo real",
+      histories: "Históricos",
+      report: "Reportar / Sugerencias",
+      glossary: "Glosario",
+    }
+  },
+
+  variables: {
+    selected: "Seleccionadas",
+    available: "Disponibles",
+    pickPrimary: "Variable A",
+    pickSecondary: "Variable B (opcional)",
+    units: "Unidad",
+    range: "Rango",
+  },
+
+  status: {
+    operating: "OPERACIÓN",
+    stopped: "DETENIDO",
+    sermo: "SERMO",
+  },
+};
+
+window.LABELS = LABELS;

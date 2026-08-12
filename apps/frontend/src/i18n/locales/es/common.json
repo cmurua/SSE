@@ -1,0 +1,5 @@
+{
+  "appName": "SSE",
+  "appLong": "Sistema de Soporte a la Ensenanza",
+  "nav": { "home": "Inicio", "realtime": "Tiempo Real", "historicals": "Historicos", "reports": "Sugerencias", "help": "Ayuda", "about": "Conozca el RA-0", "logout": "Cerrar sesion" }
+}

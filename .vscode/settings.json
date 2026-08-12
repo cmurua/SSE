@@ -1,0 +1,7 @@
+{
+  "editor.formatOnSave": true,
+  "python.analysis.extraPaths": ["apps/backend"],
+  "[python]": { "editor.defaultFormatter": "charliermarsh.ruff" },
+  "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" }
+}
