@@ -1,0 +1,14 @@
+{
+  "folders": [
+    { "name": "root", "path": "." },
+    { "name": "backend", "path": "apps/backend" },
+    { "name": "frontend", "path": "apps/frontend" },
+    { "name": "docs", "path": "docs" }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/node_modules": true
+    }
+  }
+}

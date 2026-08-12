@@ -1,0 +1,5 @@
+{
+  "appName": "SSE",
+  "appLong": "Teaching Support System",
+  "nav": { "home": "Home", "realtime": "Real time", "historicals": "History", "reports": "Suggestions", "help": "Help", "about": "About RA-0", "logout": "Log out" }
+}
