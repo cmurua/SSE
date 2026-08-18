@@ -7,5 +7,7 @@ export default defineConfig({
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
   },
-  server: { port: 5173 },
+  // host: true expone el dev server fuera del contenedor (0.0.0.0);
+  // strictPort evita que Vite se mueva a otro puerto y rompa el mapeo Docker.
+  server: { host: true, port: 5173, strictPort: true },
 });

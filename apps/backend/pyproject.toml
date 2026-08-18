@@ -10,7 +10,7 @@ dependencies = [
     "alembic>=1.13",
     "psycopg[binary]>=3.2",
     "pydantic>=2.7",
-    "pydantic-settings>=2.3",
+    "pydantic-settings>=2.7",
     "pyjwt>=2.8",
     "httpx>=0.27",
     "websockets>=12.0",
@@ -26,3 +26,9 @@ dev = [
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+# El repo usa flat-layout y junto a `app/` conviven `migrations/` y `tests/`,
+# que no son parte del paquete distribuible. Sin esta seccion, la deteccion
+# automatica de setuptools aborta con "Multiple top-level packages discovered".
+[tool.setuptools.packages.find]
+include = ["app*"]

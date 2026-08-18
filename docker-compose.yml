@@ -4,18 +4,21 @@ services:
     image: postgres:16-alpine
     env_file: .env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?falta POSTGRES_USER en el .env de la raiz}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en el .env de la raiz}
+      POSTGRES_DB: ${POSTGRES_DB:?falta POSTGRES_DB en el .env de la raiz}
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - sse_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      # -d evita el falso positivo del arranque: durante la inicializacion
+      # Postgres levanta un servidor temporal que ya responde a pg_isready.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 30s
 
   backend:
     build:
@@ -26,10 +29,23 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "${BACKEND_PORT}:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./apps/backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      # Sin curl en python:3.12-slim; urllib alcanza para el chequeo.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   frontend:
     build:
@@ -37,9 +53,10 @@ services:
       dockerfile: ../../infra/docker/frontend.Dockerfile
     env_file: apps/frontend/.env
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
-      - "${FRONTEND_PORT}:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     volumes:
       - ./apps/frontend:/app
       - /app/node_modules

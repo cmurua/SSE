@@ -1,0 +1,8 @@
+# Evita copiar secretos y artefactos locales dentro de la imagen.
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+build/
+.vite/

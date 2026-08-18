@@ -3,6 +3,6 @@
 // cualquier adapter futuro (mismas props: variables, data, mode, title, height).
 import type { ChartRendererProps } from "../../types";
 
-export function PlaceholderChartAdapter(props: ChartRendererProps) {
+export function PlaceholderChartAdapter(_props: ChartRendererProps) {
   return <div className="card">{/* TODO: portar la logica SVG de ChartPlaceholder.jsx */}</div>;
 }
