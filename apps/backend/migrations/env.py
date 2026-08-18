@@ -1,4 +1,66 @@
-# Entrypoint estandar de Alembic. Pendiente de conectar con app.db.base.Base.metadata
-# y app.config.settings.get_settings().database_url una vez que los modelos de los
-# dominios (auth, reactor_data, historicals, reports, audit) esten definidos.
-# TODO: completar siguiendo el template oficial de `alembic init`.
+# Entrypoint de Alembic (template oficial de `alembic init`, adaptado).
+#
+# Dos desvios respecto del template: la URL de conexion sale de la config de
+# la app (app.config.settings) en vez de alembic.ini, para no duplicar la
+# credencial ni versionarla; y antes de calcular el diff se importan todos
+# los modelos de dominio via app.db.base.import_models().
+from logging.config import fileConfig
+
+from alembic import context
+from sqlalchemy import create_engine, pool
+
+from app.config.settings import get_settings
+from app.db.base import Base, import_models
+
+config = context.config
+
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+import_models()
+
+target_metadata = Base.metadata
+
+
+def get_url() -> str:
+    """Fuente de verdad unica de la conexion: el .env que lee Settings."""
+    return get_settings().database_url
+
+
+def run_migrations_offline() -> None:
+    """Emite el SQL a stdout sin conectarse (`alembic upgrade head --sql`)."""
+    context.configure(
+        url=get_url(),
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+        # Sin esto Alembic ignora los cambios de tipo de una columna existente.
+        compare_type=True,
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online() -> None:
+    """Aplica las migraciones contra la base, con una conexion propia."""
+    # create_engine en lugar del engine_from_config del template: la URL no
+    # pasa por el ini, asi que no hay que escapar los '%' de la contrasena
+    # (ConfigParser los interpretaria como interpolacion).
+    connectable = create_engine(get_url(), poolclass=pool.NullPool)
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+        )
+
+        with context.begin_transaction():
+            context.run_migrations()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()

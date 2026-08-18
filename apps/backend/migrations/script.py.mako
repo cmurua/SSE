@@ -1,7 +1,13 @@
-'''${message}\n\nRevision ID: ${up_revision}\nRevises: ${down_revision | comma,n}\nCreate Date: ${create_date}\n\n'''
-from alembic import op
+"""${message}
+
+Revision ID: ${up_revision}
+Revises: ${down_revision | comma,n}
+Create Date: ${create_date}
+
+"""
 import sqlalchemy as sa
-${imports if imports else ""}
+from alembic import op
+${imports if imports else ""}\
 
 revision = ${repr(up_revision)}
 down_revision = ${repr(down_revision)}

@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.config.settings import get_settings
 
 settings = get_settings()
-engine = create_engine(settings.database_url)
+# pool_pre_ping descarta conexiones muertas antes de usarlas: en desarrollo
+# el contenedor de Postgres se reinicia y las del pool quedan invalidas.
+engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
