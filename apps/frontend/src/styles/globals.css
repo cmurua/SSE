@@ -1,7 +1,9 @@
+/* @import debe ir antes que cualquier otra regla (incluidas las directivas
+   @tailwind), de lo contrario PostCSS lo descarta y tokens.css no se aplica. */
+@import "./tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import "./tokens.css";
 
 /* TODO: portar .card, .field, .btn-dark, .navlink, etc. desde SSE.html */
