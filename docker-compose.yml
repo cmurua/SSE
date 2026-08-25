@@ -32,6 +32,11 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./apps/backend:/app
+      # Herramientas de desarrollo (simulador del SSO, seed, wait_for_db).
+      # Viven fuera de apps/backend pero necesitan importar `app`, asi que se
+      # ejecutan dentro de este contenedor. Solo lectura: el backend nunca
+      # deberia escribirlas.
+      - ./scripts:/scripts:ro
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
       # Sin curl en python:3.12-slim; urllib alcanza para el chequeo.
