@@ -6,4 +6,230 @@
 @tailwind components;
 @tailwind utilities;
 
-/* TODO: portar .card, .field, .btn-dark, .navlink, etc. desde SSE.html */
+/* Puerto del bloque <style> de docs/design/frontend-prototype/SSE.html.
+   Se declara DESPUES de @tailwind utilities, igual que en el prototipo (donde
+   el <style> venia despues del CDN de Tailwind): asi estas clases ganan a las
+   utilidades y los overrides puntuales se hacen con `!` (p.ej. "btn-dark
+   !py-3 !rounded-lg"), tal como en las pantallas del prototipo. */
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* utility helpers */
+.bg-green-header {
+  background-color: var(--green-800);
+}
+.bg-green-deep {
+  background-color: var(--green-900);
+}
+.text-green-header {
+  color: var(--green-800);
+}
+.border-line {
+  border-color: var(--line);
+}
+.border-line-2 {
+  border-color: var(--line-2);
+}
+.bg-band {
+  background-color: var(--band);
+}
+.bg-surface {
+  background-color: var(--surface);
+}
+.text-muted {
+  color: var(--muted);
+}
+
+/* checkered placeholder for image */
+.img-placeholder {
+  background-color: var(--img-placeholder);
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(0, 0, 0, 0.04) 0 12px,
+    transparent 12px 24px
+  );
+}
+
+/* status dot pulse */
+@keyframes pulseDot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+}
+.pulse-dot {
+  animation: pulseDot 1.6s ease-in-out infinite;
+}
+
+/* subtle scrollbars */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* form inputs */
+.field {
+  width: 100%;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.field:focus {
+  border-color: var(--green-700);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.field::placeholder {
+  color: var(--placeholder);
+}
+.label-text {
+  font-size: 13px;
+  color: var(--label);
+  font-weight: 500;
+  margin-bottom: 6px;
+  display: block;
+}
+
+/* primary dark pill button */
+.btn-dark {
+  background: var(--ink);
+  color: var(--surface);
+  border-radius: 9999px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  transition:
+    background 0.15s,
+    transform 0.05s;
+}
+.btn-dark:hover {
+  background: var(--ink-2);
+}
+.btn-dark:active {
+  transform: translateY(1px);
+}
+.btn-dark:disabled {
+  background: var(--muted);
+  cursor: not-allowed;
+}
+.btn-ghost {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
+  border-radius: 9999px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.btn-ghost:hover {
+  background: var(--surface-hover);
+}
+
+/* tabs */
+.tab {
+  padding: 12px 20px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+}
+.tab.active {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+/* link reset */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* chip */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+}
+
+/* card */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.card-pad {
+  padding: 20px;
+}
+
+/* section banner */
+.banner {
+  background: var(--band);
+  color: var(--surface);
+  text-align: center;
+  padding: 14px 20px;
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* nav link */
+.navlink {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.navlink:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.navlink.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+/* range slider */
+input[type="range"] {
+  accent-color: var(--green-800);
+}

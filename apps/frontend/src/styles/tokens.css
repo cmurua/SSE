@@ -1,5 +1,7 @@
 /* Portado literal de las CSS custom properties de SSE.html (prototipo
-   Claude Design): paleta institucional verde + acentos. */
+   Claude Design): paleta institucional verde + acentos.
+   Unica fuente de verdad de color: ni globals.css ni los componentes
+   deben hardcodear valores hexadecimales. */
 :root {
   --green-900: #1f3a30;
   --green-800: #294a3c;
@@ -16,4 +18,18 @@
   --good: #2e7d4f;
   --bad: #b3261e;
   --warn: #b27a13;
+
+  /* Neutros que en el prototipo estaban inline dentro del <style>; se
+     extraen aca para cumplir "sin colores hardcodeados" fuera de tokens. */
+  --surface: #ffffff;
+  --surface-hover: #f7f8f9;
+  --band: #b9bcc0;
+  --placeholder: #a6abb1;
+  --label: #3a3d42;
+  --scrollbar-thumb: #c8ccd1;
+  --img-placeholder: #d8dadd;
+  --focus-ring: rgba(51, 90, 72, 0.15);
+
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }

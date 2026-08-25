@@ -1,5 +1,8 @@
 {
   "appName": "SSE",
   "appLong": "Sistema de Soporte a la Ensenanza",
-  "nav": { "home": "Inicio", "realtime": "Tiempo Real", "historicals": "Historicos", "reports": "Sugerencias", "help": "Ayuda", "about": "Conozca el RA-0", "logout": "Cerrar sesion" }
+  "institution": "Universidad Nacional de Cordoba",
+  "faculty": "Facultad de Ciencias Exactas, Fisicas y Naturales",
+  "nav": { "home": "Inicio", "realtime": "Tiempo Real", "historicals": "Historicos", "reports": "Sugerencias", "help": "Ayuda", "about": "Conozca el RA-0", "logout": "Cerrar sesion", "welcome": "Bienvenido" },
+  "footer": { "version": "SSE-330 v1.0.0", "readOnly": "RA-0 · Sistema de solo lectura" }
 }
