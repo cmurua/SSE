@@ -9,9 +9,22 @@ muestras. Cerrarla es escribir `ended_at`. La duracion no se persiste:
 se deriva de `ended_at - started_at`, que ademas es la unica forma
 consistente de tratar una operacion todavia abierta.
 
-**PENDIENTE:** la tarea 2.1 decide si SERMO se deriva de esta tabla
-(opcion 1) o de una senal dedicada. El esquema soporta la opcion 1; si
-gana otra, `ended_at` queda como metadato de la operacion.
+La fila abierta es la **proyeccion** de la senal SERMO, no su origen:
+SERMO llega por MQTT desde la FPGA y `ReactorStateService` es el unico
+que abre y cierra estas filas (ADR 0004). "Hay una operacion abierta"
+sigue siendo equivalente a "el reactor opera", pero el estado se
+consulta en memoria, no con un SELECT.
+
+**Invariante:** como maximo una operacion abierta a la vez, garantizada
+por un indice unico parcial sobre `(ended_at IS NULL)` — indice sobre la
+expresion y no sobre la columna, porque en Postgres dos NULL no chocan
+entre si (migracion `a1c3f7d2e910`). Con dos abiertas, "cual es la
+operacion en curso" no tendria respuesta y las muestras de tiempo real
+no sabrian a cual pertenecen.
+
+**PENDIENTE:** el nombre y el operador de una operacion. La FPGA no los
+conoce y el sistema es de solo lectura, asi que hoy se generan
+(`Operacion <fecha> <hora>`, operador `Desconocido`). Ver ADR 0004.
 
 ## reactor_samples
 Tabla ancha: id, operation_id (FK), timestamp, + 1 columna por variable

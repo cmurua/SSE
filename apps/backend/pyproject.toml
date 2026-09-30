@@ -14,6 +14,9 @@ dependencies = [
     "pyjwt>=2.8",
     "httpx>=0.27",
     "websockets>=12.0",
+    # Cliente MQTT asincronico (envoltorio de paho sobre asyncio): recibe la
+    # senal SERMO que publica la FPGA. Ver docs/decisions/0004-representacion-sermo.md.
+    "aiomqtt>=2.3",
 ]
 
 [project.optional-dependencies]

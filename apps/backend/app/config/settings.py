@@ -7,6 +7,8 @@ from typing import Annotated
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from app.mqtt.topics import DEFAULT_SERMO_TOPIC, SERMO_QOS
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -32,6 +34,37 @@ class Settings(BaseSettings):
     login_lockout_minutes: int = 10
 
     realtime_max_latency_seconds: int = 2
+
+    # --- Senal SERMO por MQTT (ver docs/decisions/0004-representacion-sermo.md)
+    # El estado de operacion del reactor NO se deriva de la base: llega como
+    # mensaje MQTT publicado por la FPGA. Apagar `mqtt_enabled` deja el backend
+    # levantado sin ingesta, util para correr solo la API contra datos ya
+    # cargados (seed) sin necesitar un broker.
+    mqtt_enabled: bool = True
+    mqtt_host: str = "mqtt"
+    mqtt_port: int = 1883
+    mqtt_username: str | None = None
+    mqtt_password: str | None = None
+    mqtt_topic_sermo: str = DEFAULT_SERMO_TOPIC
+    mqtt_qos: int = SERMO_QOS
+    # Identificador de cliente ante el broker. Debe ser UNICO: dos clientes
+    # con el mismo identifier se desconectan mutuamente en un bucle.
+    mqtt_client_id: str = "sse-backend"
+    mqtt_keepalive_seconds: int = 60
+    mqtt_reconnect_min_seconds: float = 1.0
+    mqtt_reconnect_max_seconds: float = 30.0
+
+    # --- Toma de datos
+    # "simulated" genera las muestras (desarrollo); "main_pc" las lee de la PC
+    # principal del reactor (sin implementar, ver
+    # app/domains/reactor_data/sources/main_pc.py).
+    acquisition_source: str = "simulated"
+    acquisition_interval_seconds: float = 1.0
+    # La FPGA senaliza que el reactor opera, pero no sabe quien lo conduce.
+    # Hasta que se defina de donde sale ese dato, las operaciones se abren con
+    # este operador (ver ADR 0004).
+    acquisition_default_operator: str = "Desconocido"
+    acquisition_default_notes: str | None = "Operacion registrada automaticamente al recibir SERMO."
 
     @field_validator("cors_origins", mode="before")
     @classmethod

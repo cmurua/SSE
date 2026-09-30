@@ -13,6 +13,11 @@
   esquema para tiempo real e historicos.
 - Regla de negocio central: la señal SERMO habilita/deshabilita el modulo
   de tiempo real (RF04); en falso quedan disponibles los historicos.
+- Origen de SERMO: una FPGA publica la señal por **MQTT**; al recibirla
+  el backend abre la operacion y arranca la toma de datos desde la PC
+  principal del reactor. La base de datos es proyeccion de esa señal, no
+  su fuente. Ver `docs/decisions/0004-representacion-sermo.md` y el
+  contrato en `docs/architecture/mqtt-protocol.md`.
 - Latencia objetivo <= 2s (RNF01), ~100 usuarios concurrentes (criterio
   no funcional del pedido de estructura; la SRS original menciona 40).
 
@@ -32,6 +37,11 @@
      usuario/contrasena via su propia API (`domains/auth/adapters/external_api_provider.py`).
   2. FUTURO (mencionado en la SRS como dependencia): el SSO real de la
      UNC. Reservado en `domains/auth/adapters/sso/` sin implementar.
+- Formato exacto del mensaje MQTT de la FPGA y protocolo de lectura de la
+  PC principal (pull vs. push): sin confirmar. El backend acepta hoy un
+  superconjunto de formatos probables y la fuente de muestras esta detras
+  de un puerto (`domains/reactor_data/sources/`) para que definirlo no
+  toque el resto. Ver ADR 0004, seccion "pendiente de confirmar".
 - Catalogo de ~30 variables del reactor: se tomo como referencia el mock
   del prototipo de frontend (`SSE V1.zip`, `mockData.jsx`). La lista real
   de variables/IDs/unidades debe confirmarse con el SIR/SSO antes de
@@ -52,7 +62,14 @@
 - Los dominios `realtime` y `reactor_state` estan separados a proposito
   (single responsibility), pero exige disciplina para no duplicar logica
   de gating por SERMO en ambos — toda la logica de "esta habilitado el
-  tiempo real" debe vivir en un solo lugar.
+  tiempo real" debe vivir en un solo lugar. Hoy ese lugar es
+  `ReactorStateService`; `domains/realtime` debe preguntarle en vez de
+  reimplementar la regla, y `GET /realtime/status` (stub) tiene que
+  definirse o eliminarse para no volverse una segunda fuente de verdad.
+- El estado de SERMO vive en memoria del proceso del backend. Correr mas
+  de un worker de uvicorn daria una copia por worker, cada una con su
+  propia toma de datos escribiendo las mismas muestras. El MVP corre con
+  un worker; cambiarlo requiere coordinacion externa (ver tarea 2.4).
 
 ## Evoluciones futuras
 

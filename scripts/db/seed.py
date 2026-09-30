@@ -4,7 +4,7 @@
 Sin esto las pantallas de historicos (RF06) y de graficos (RF05) arrancan
 vacias y no hay nada que probar hasta correr el simulador en vivo. Las
 operaciones que genera son CERRADAS: no afectan al estado del reactor, que se
-deriva de la operacion abierta (ver simulator.py).
+deriva de la senal SERMO (ver scripts/mqtt/fpga.py).
 
     docker compose exec backend python /scripts/db/seed.py
     docker compose exec backend python /scripts/db/seed.py --operations 3
@@ -19,17 +19,18 @@ import argparse
 import sys
 from datetime import UTC, datetime, timedelta
 
-# `simulator` es el modulo hermano de este directorio: al correr el script
-# como `python /scripts/db/seed.py`, Python deja /scripts/db en sys.path[0].
-# Se reutiliza su generador para que un historico y una operacion en vivo
-# tengan exactamente la misma forma.
-from simulator import next_operation_id, sample_values
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+# El generador de valores (`sample_values`) y el de IDs (`next_operation_id`)
+# viven en el backend y no en este script: los usa tambien la toma de datos en
+# vivo. Asi una operacion historica y una en vivo tienen exactamente la misma
+# forma, que era el punto de reutilizarlos.
 from app.db.session import SessionLocal
 from app.domains.historicals.models import Operation
 from app.domains.reactor_data.models import ReactorSample
+from app.domains.reactor_data.sources.simulated import sample_values
+from app.domains.reactor_state.repository import next_operation_id
 
 # Catalogo de ensayos tomado del prototipo de frontend
 # (docs/design/frontend-prototype/src/mockData.jsx) para que los nombres y
