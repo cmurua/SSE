@@ -2,7 +2,10 @@
 
 ## Topicos
 
-- `reactor.state` — cambios de estado SERMO/operacion.
+- `reactor.state` — cambios de estado SERMO/operacion. El origen del dato
+  es la senal MQTT de la FPGA, no la base: ver
+  `docs/architecture/mqtt-protocol.md`. No confundir los topicos MQTT
+  (FPGA -> backend) con estos, que son backend -> navegador.
 - `realtime.samples` — nuevas muestras mientras el reactor opera.
 
 Ambos definidos en `apps/backend/app/websocket/events.py` (backend) y

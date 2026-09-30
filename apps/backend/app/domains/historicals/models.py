@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -16,13 +16,31 @@ class Operation(Base):
     `ended_at - started_at`, porque guardarla obligaria a inventar un valor
     mientras la operacion esta abierta y a mantener dos datos sincronizados.
 
-    SUPUESTO: es la representacion de la opcion 1 de la tarea 2.1 (derivar
-    SERMO de la DB). El ADR todavia no esta escrito; si la decision final es
-    una senal dedicada, `ended_at` sigue siendo valido como metadato de la
-    operacion, pero deja de ser la fuente de verdad de "el reactor opera".
+    La fila abierta es CONSECUENCIA de la senal SERMO, no su origen: SERMO
+    llega por MQTT desde la FPGA y es ReactorStateService el unico que abre y
+    cierra estas filas (ver docs/decisions/0004-representacion-sermo.md). Como
+    proyeccion de esa senal, "hay una operacion abierta" sigue siendo
+    equivalente a "el reactor opera", pero preguntarselo a la base agrega
+    latencia sin agregar certeza.
+
+    Como maximo puede haber una abierta a la vez, garantizado por indice unico
+    parcial en la base (ver __table_args__).
     """
 
     __tablename__ = "operations"
+
+    __table_args__ = (
+        # Como maximo una operacion abierta. Indice unico parcial sobre la
+        # expresion, no sobre la columna: dos NULL no chocan entre si en un
+        # indice unico de Postgres. Ver la migracion
+        # `a1c3f7d2e910_una_sola_operacion_abierta`.
+        Index(
+            "uq_operations_una_abierta",
+            text("(ended_at IS NULL)"),
+            unique=True,
+            postgresql_where=text("ended_at IS NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     name: Mapped[str] = mapped_column(String)
