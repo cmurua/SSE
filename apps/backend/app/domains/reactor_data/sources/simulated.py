@@ -11,14 +11,15 @@ from __future__ import annotations
 import math
 
 from app.domains.reactor_data.sources.base import SampleSource, SampleValues
-from app.domains.reactor_data.variable_catalog import REACTOR_VARIABLES, sample_column
-
-# Unidad que marca a una variable como booleana en el catalogo (EST_BOM).
-BOOLEAN_UNIT = "0/1"
+from app.domains.reactor_data.variable_catalog import (
+    CONSIGNA,
+    REACTOR_VARIABLES,
+    sample_column,
+)
 
 
 def variable_value(variable: dict, t: float) -> float:
-    """Valor de una variable en el segundo `t` de la operacion.
+    """Valor de una señal en el segundo `t` de la operacion.
 
     Port directo de `generateSeries()` del prototipo de frontend
     (docs/design/frontend-prototype/src/mockData.jsx): superposicion de
@@ -28,9 +29,16 @@ def variable_value(variable: dict, t: float) -> float:
     como una medicion y no como estatica.
 
     Es determinista: el mismo `t` da siempre el mismo valor, y la semilla sale
-    del ID de la variable, asi que cada una tiene su propia fase y no se mueven
+    del ID de la señal, asi que cada una tiene su propia fase y no se mueven
     todas en bloque.
     """
+    # Las consignas (niveles de disparo, umbral del canal de marcha) no son
+    # mediciones: valen lo que configuro un operador y no se mueven solas.
+    # Hacerlas oscilar inventaria un fenomeno que no existe y ensuciaria los
+    # graficos donde se las usa como linea de referencia.
+    if variable["kind"] == CONSIGNA:
+        return float(variable["nominal"])
+
     span = variable["max"] - variable["min"]
     center = variable["nominal"]
     seed = sum(ord(character) for character in variable["id"])
@@ -46,16 +54,10 @@ def variable_value(variable: dict, t: float) -> float:
 
     value = center + noise + drift
 
-    # El clamp garantiza el criterio de aceptacion: ningun valor sale del
-    # rango declarado. Hace falta porque hay variables cuyo nominal esta
-    # pegado a un extremo (POS_BRS y EST_BOM tienen nominal == max).
-    value = max(variable["min"], min(variable["max"], value))
-
-    # Una bomba encendida al 93% no existe: las booleanas se redondean.
-    if variable["unit"] == BOOLEAN_UNIT:
-        return float(round(value))
-
-    return value
+    # El clamp garantiza que ningun valor salga del rango declarado. Hace
+    # falta porque hay señales cuyo nominal esta cerca de un extremo (NN1 y
+    # NT1 operan casi llenos).
+    return max(variable["min"], min(variable["max"], value))
 
 
 def sample_values(t: float) -> dict[str, float]:

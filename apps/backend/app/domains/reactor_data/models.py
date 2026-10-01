@@ -1,13 +1,17 @@
 # SUPUESTO: tabla ancha (una fila = una muestra temporal, una columna por
-# variable), tal como fue descripto. Una columna por cada entrada de
-# variable_catalog.py, con el nombre que define `sample_column()`; el catalogo
-# es PROVISIONAL, asi que este listado cambia junto con el (tarea 3.9).
+# señal), tal como fue descripto. Una columna por cada entrada de
+# variable_catalog.py, con el nombre que define `sample_column()`.
 # Alternativa descartada: modelo EAV, por ser mas costoso de consultar a 1
 # muestra/segundo con hasta 100 usuarios.
 #
-# Todas las variables se guardan como Float y nullable: una muestra puede
-# llegar incompleta si el SIR no publica algun canal, y distinguir "no medido"
-# (NULL) de un 0 real importa para los graficos de RF05.
+# Las 34 columnas corresponden al listado real de señales del RA-0 (tarea
+# 3.9). Agregar o quitar una señal implica una migracion Alembic, asi que el
+# listado no deberia moverse salvo que cambie la instrumentacion; los rangos
+# del catalogo, en cambio, se corrigen sin tocar el esquema.
+#
+# Todas las señales se guardan como Float y nullable: una muestra puede llegar
+# incompleta si el SIR no publica algun canal, y distinguir "no medido" (NULL)
+# de un 0 real importa para los graficos de RF05.
 from datetime import datetime
 
 from sqlalchemy import DateTime, Float, ForeignKey, Index, String
@@ -30,55 +34,57 @@ class ReactorSample(Base):
     operation_id: Mapped[str] = mapped_column(String, ForeignKey("operations.id"))
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
-    # Nucleo
-    pot_nuc: Mapped[float | None] = mapped_column(Float)
-    flu_neu: Mapped[float | None] = mapped_column(Float)
-    tem_nuc: Mapped[float | None] = mapped_column(Float)
-    niv_mod: Mapped[float | None] = mapped_column(Float)
 
-    # Refrigeracion
-    tem_pil: Mapped[float | None] = mapped_column(Float)
-    pre_pri: Mapped[float | None] = mapped_column(Float)
-    cau_ref: Mapped[float | None] = mapped_column(Float)
-    niv_pil: Mapped[float | None] = mapped_column(Float)
+    # SA1 - Canal de Arranque 1
+    loga1: Mapped[float | None] = mapped_column(Float)
+    ta1: Mapped[float | None] = mapped_column(Float)
 
-    # Control
-    pos_br1: Mapped[float | None] = mapped_column(Float)
-    pos_br2: Mapped[float | None] = mapped_column(Float)
-    pos_br3: Mapped[float | None] = mapped_column(Float)
-    pos_br4: Mapped[float | None] = mapped_column(Float)
-    pos_brs: Mapped[float | None] = mapped_column(Float)
+    # SA2 - Canal de Arranque 2
+    loga2: Mapped[float | None] = mapped_column(Float)
+    ta2: Mapped[float | None] = mapped_column(Float)
 
-    # Cinetica
-    per_rea: Mapped[float | None] = mapped_column(Float)
-    rea_neu: Mapped[float | None] = mapped_column(Float)
+    # SM1 - Canal de Marcha 1
+    logm1: Mapped[float | None] = mapped_column(Float)
+    tm1: Mapped[float | None] = mapped_column(Float)
 
-    # Radiacion
-    dos_sal: Mapped[float | None] = mapped_column(Float)
-    dos_pil: Mapped[float | None] = mapped_column(Float)
-    dos_ven: Mapped[float | None] = mapped_column(Float)
+    # SM2 - Canal de Marcha 2
+    logm2: Mapped[float | None] = mapped_column(Float)
+    tm2: Mapped[float | None] = mapped_column(Float)
 
-    # Sala
-    tem_amb: Mapped[float | None] = mapped_column(Float)
-    hum_amb: Mapped[float | None] = mapped_column(Float)
-    pre_atm: Mapped[float | None] = mapped_column(Float)
+    # SMP - Canal Lineal de Marcha
+    lcm4: Mapped[float | None] = mapped_column(Float)
+    linm4: Mapped[float | None] = mapped_column(Float)
 
-    # Instrumentacion
-    vol_det1: Mapped[float | None] = mapped_column(Float)
-    vol_det2: Mapped[float | None] = mapped_column(Float)
-    fre_det: Mapped[float | None] = mapped_column(Float)
-    rui_det: Mapped[float | None] = mapped_column(Float)
+    # SP2 - Proteccion
+    ndcm4: Mapped[float | None] = mapped_column(Float)
 
-    # Electrico
-    ten_red: Mapped[float | None] = mapped_column(Float)
-    cor_bom: Mapped[float | None] = mapped_column(Float)
-    est_bom: Mapped[float | None] = mapped_column(Float)
+    # SMA - Monitores de Area
+    masc: Mapped[float | None] = mapped_column(Float)
+    mabt: Mapped[float | None] = mapped_column(Float)
+    marr: Mapped[float | None] = mapped_column(Float)
+    matm: Mapped[float | None] = mapped_column(Float)
+    maae: Mapped[float | None] = mapped_column(Float)
+    ndsc: Mapped[float | None] = mapped_column(Float)
+    ndbt: Mapped[float | None] = mapped_column(Float)
+    ndrr: Mapped[float | None] = mapped_column(Float)
+    ndtm: Mapped[float | None] = mapped_column(Float)
+    ndae: Mapped[float | None] = mapped_column(Float)
 
-    # Ventilacion
-    cau_ven: Mapped[float | None] = mapped_column(Float)
-    pre_ven: Mapped[float | None] = mapped_column(Float)
+    # SCM - Circuito de Moderador
+    tt1: Mapped[float | None] = mapped_column(Float)
+    tn1: Mapped[float | None] = mapped_column(Float)
+    nt1: Mapped[float | None] = mapped_column(Float)
+    nn1: Mapped[float | None] = mapped_column(Float)
+    qin: Mapped[float | None] = mapped_column(Float)
+    qtm: Mapped[float | None] = mapped_column(Float)
+    qrd: Mapped[float | None] = mapped_column(Float)
 
-    # Quimica
-    con_ph: Mapped[float | None] = mapped_column(Float)
-    con_o2: Mapped[float | None] = mapped_column(Float)
-    con_con: Mapped[float | None] = mapped_column(Float)
+    # SBC - Barras de Control
+    posbc1: Mapped[float | None] = mapped_column(Float)
+    posbc2: Mapped[float | None] = mapped_column(Float)
+    posbc3: Mapped[float | None] = mapped_column(Float)
+    posbc4: Mapped[float | None] = mapped_column(Float)
+
+    # SSO - Supervision de Operacion
+    reactm4: Mapped[float | None] = mapped_column(Float)
+    potm4: Mapped[float | None] = mapped_column(Float)
