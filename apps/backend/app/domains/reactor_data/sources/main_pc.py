@@ -11,8 +11,9 @@
 # Falta definir con quien opera la PC principal:
 #   - protocolo y direccion (OPC UA, Modbus, socket propio, archivo compartido)
 #   - si el backend consulta (pull) o la PC emite (push); ver sources/base.py
-#   - el mapeo canal del SIR -> columna de `reactor_samples`, que hoy sale del
-#     catalogo provisional de variable_catalog.py (tarea 3.9)
+#   - el mapeo canal del SIR -> columna de `reactor_samples`. El catalogo de
+#     variable_catalog.py ya tiene las 34 senales reales (tarea 3.9), asi que
+#     falta solo saber como las nombra el protocolo de la PC principal.
 from __future__ import annotations
 
 from app.domains.reactor_data.sources.base import SampleSource, SampleValues

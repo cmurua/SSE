@@ -32,7 +32,7 @@ class CountingSource(SampleSource):
 
     async def read(self, elapsed_seconds):
         self.reads.append(elapsed_seconds)
-        return {"pot_nuc": 5.0}
+        return {"potm4": 5.0}
 
     async def close(self):
         self.closed += 1
