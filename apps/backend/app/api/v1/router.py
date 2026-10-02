@@ -1,14 +1,28 @@
 # Agrega los routers de cada dominio bajo /api/v1. No contiene logica propia:
 # cada dominio es responsable de sus propios endpoints y validaciones.
+#
+# Para exigir sesion en TODOS los endpoints de un dominio, se le pasa la
+# dependency al include_router:
+#
+#     api_router.include_router(
+#         historicals_router,
+#         prefix="/historicals",
+#         tags=["historicals"],
+#         dependencies=[Depends(get_current_user)],
+#     )
+#
+# Hoy no se protege ninguno a proposito: los endpoints todavia son stubs y
+# cada tarea decide si el suyo requiere sesion. Para proteger uno solo,
+# anotarlo con `user: CurrentUser` (ver domains/auth/dependencies.py).
 from fastapi import APIRouter
 
 from app.domains.auth.router import router as auth_router
+from app.domains.exports.router import router as exports_router
+from app.domains.help.router import router as help_router
+from app.domains.historicals.router import router as historicals_router
 from app.domains.reactor_state.router import router as reactor_state_router
 from app.domains.realtime.router import router as realtime_router
-from app.domains.historicals.router import router as historicals_router
-from app.domains.exports.router import router as exports_router
 from app.domains.reports.router import router as reports_router
-from app.domains.help.router import router as help_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
