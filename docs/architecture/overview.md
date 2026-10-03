@@ -18,6 +18,12 @@
   principal del reactor. La base de datos es proyeccion de esa señal, no
   su fuente. Ver `docs/decisions/0004-representacion-sermo.md` y el
   contrato en `docs/architecture/mqtt-protocol.md`.
+- Tiempo real sin consultar Postgres: las transiciones de SERMO llegan por
+  push MQTT y las muestras se publican en el mismo proceso apenas se
+  guardan (`register_listener()` en `ReactorStateService` y en
+  `AcquisitionService`). Ni polling ni LISTEN/NOTIFY; este ultimo queda como
+  salida si se pasa a varios procesos. Ver
+  `docs/decisions/0006-mecanismo-lectura-tiempo-real.md`.
 - Latencia objetivo <= 2s (RNF01), ~100 usuarios concurrentes (criterio
   no funcional del pedido de estructura; la SRS original menciona 40).
 
@@ -46,8 +52,6 @@
   del prototipo de frontend (`SSE V1.zip`, `mockData.jsx`). La lista real
   de variables/IDs/unidades debe confirmarse con el SIR/SSO antes de
   cerrar el modelo de datos (`app/domains/reactor_data/`).
-- Mecanismo de lectura de tiempo real desde PostgreSQL (polling vs.
-  LISTEN/NOTIFY): sin definir, impacta directamente en RNF01 (latencia).
 - Rate limiting / bloqueo de intentos fallidos (RF03): implementado hoy
   como tabla en Postgres (`login_attempts`); si la concurrencia real lo
   justifica, evaluar Redis a futuro.
@@ -68,8 +72,9 @@
   definirse o eliminarse para no volverse una segunda fuente de verdad.
 - El estado de SERMO vive en memoria del proceso del backend. Correr mas
   de un worker de uvicorn daria una copia por worker, cada una con su
-  propia toma de datos escribiendo las mismas muestras. El MVP corre con
-  un worker; cambiarlo requiere coordinacion externa (ver tarea 2.4).
+  propia toma de datos escribiendo las mismas muestras. El backend corre
+  con un worker y el tiempo real depende de eso: cambiarlo requiere pasar
+  el aviso de muestras y de SERMO a LISTEN/NOTIFY (ver ADR 0006).
 
 ## Evoluciones futuras
 

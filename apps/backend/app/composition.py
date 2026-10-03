@@ -95,6 +95,8 @@ class ReactorRuntime:
                 pass
             self._task = None
 
+        await self.state.shutdown()
+
         # La toma de datos se corta SIN cerrar la operacion: apagar el backend
         # no significa que el reactor se haya detenido. La operacion queda
         # abierta y el proximo arranque la reconcilia (ver
@@ -107,12 +109,16 @@ def build_reactor_runtime(settings: Settings) -> ReactorRuntime:
         source=build_sample_source(settings),
         repository=ReactorSampleRepository(SessionLocal),
         interval_seconds=settings.acquisition_interval_seconds,
+        retry_max_seconds=settings.db_retry_max_seconds,
+        max_pending_samples=settings.acquisition_max_pending_samples,
     )
     state_service = ReactorStateService(
         repository=OperationLifecycleRepository(SessionLocal),
         acquisition=acquisition,
         default_operator=settings.acquisition_default_operator,
         default_notes=settings.acquisition_default_notes,
+        retry_min_seconds=settings.db_retry_min_seconds,
+        retry_max_seconds=settings.db_retry_max_seconds,
     )
 
     subscriber = None

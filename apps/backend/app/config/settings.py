@@ -65,6 +65,19 @@ class Settings(BaseSettings):
     # este operador (ver ADR 0004).
     acquisition_default_operator: str = "Desconocido"
     acquisition_default_notes: str | None = "Operacion registrada automaticamente al recibir SERMO."
+    # Muestras que se guardan en memoria mientras la base no responde, para
+    # volcarlas cuando vuelve. 3600 = una hora a 1 Hz; pasado eso se descartan
+    # las mas viejas (ver docs/decisions/0006-mecanismo-lectura-tiempo-real.md).
+    acquisition_max_pending_samples: int = 3600
+
+    # --- Reintento ante una caida de la base
+    # Lo usan las transiciones de SERMO (abrir/cerrar la operacion) y la
+    # escritura de muestras. El backoff arranca en el minimo y se duplica
+    # hasta el maximo; el pool de SQLAlchemy se reconecta solo en cada intento.
+    # El maximo es bajo a proposito: es lo que puede tardar el tiempo real en
+    # volver despues de que la base se recupera.
+    db_retry_min_seconds: float = 1.0
+    db_retry_max_seconds: float = 10.0
 
     @field_validator("cors_origins", mode="before")
     @classmethod
