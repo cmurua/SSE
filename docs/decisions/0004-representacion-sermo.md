@@ -141,6 +141,6 @@ ingesta falle.
 5. **Un solo proceso de backend.** El estado de SERMO vive en memoria del
    proceso. Con varios workers de uvicorn, cada uno tendria su propia copia y
    su propia toma de datos escribiendo las mismas muestras. El MVP corre con
-   un worker; si eso cambia, hace falta coordinacion externa (ver la tarea
-   2.4, que decide el mecanismo de tiempo real, y la nota sobre Redis en
-   `overview.md`).
+   un worker; si eso cambia, hace falta coordinacion externa. El ADR 0006
+   (tarea 2.4) fija el mecanismo de tiempo real dentro del proceso y deja
+   descripta la salida con LISTEN/NOTIFY para ese caso.

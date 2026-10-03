@@ -4,7 +4,10 @@
 #
 # Los tests no tocan la base ni el broker: el repositorio y la toma de datos
 # se reemplazan por dobles. Lo que se verifica aca es la decision, no el IO.
+import asyncio
 from datetime import UTC, datetime
+
+from sqlalchemy.exc import OperationalError
 
 from app.domains.reactor_state.schemas import ReactorStatus
 from app.domains.reactor_state.service import ReactorStateService
@@ -17,11 +20,18 @@ class FakeOperationRepository:
         self.opened = []
         self.closed = []
         self._sequence = 0
+        # Simula la base caida: abrir y cerrar fallan mientras sea True.
+        self.down = False
+
+    def _check(self):
+        if self.down:
+            raise OperationalError("UPDATE operations", {}, ConnectionRefusedError())
 
     def find_open(self):
         return self._open
 
     def open(self, *, name, operator, notes, started_at):
+        self._check()
         self._sequence += 1
         self._open = {
             "id": f"OP-TEST-{self._sequence:03d}",
@@ -33,6 +43,7 @@ class FakeOperationRepository:
         return self._open
 
     def close_open(self, ended_at=None):
+        self._check()
         if self._open is None:
             return None
         closed, self._open = self._open, None
@@ -56,11 +67,28 @@ class FakeAcquisition:
         self.running = False
 
 
+RETRY = 0.01
+
+
 def build_service(repository=None):
     repository = repository or FakeOperationRepository()
     acquisition = FakeAcquisition()
-    service = ReactorStateService(repository=repository, acquisition=acquisition)
+    service = ReactorStateService(
+        repository=repository,
+        acquisition=acquisition,
+        retry_min_seconds=RETRY,
+        retry_max_seconds=RETRY * 4,
+    )
     return service, repository, acquisition
+
+
+async def wait_for(condition, timeout=2.0):
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
+        if condition():
+            return True
+        await asyncio.sleep(RETRY / 2)
+    return False
 
 
 async def test_arranca_detenido():
@@ -228,3 +256,106 @@ async def test_los_listeners_reciben_cada_cambio():
 
     assert [state.sermo for state in recibidos] == [True, True, False]
     assert [state.source_connected for state in recibidos] == [False, True, True]
+
+
+# -- Caida de la base durante una transicion (ADR 0006) ---------------------
+
+
+async def test_on_con_la_base_caida_se_aplica_solo_cuando_vuelve():
+    service, repository, acquisition = build_service()
+    recibidos = []
+
+    async def listener(state):
+        recibidos.append(state.sermo)
+
+    service.register_listener(listener)
+    repository.down = True
+    publicado = datetime(2026, 10, 3, 15, 0, tzinfo=UTC)
+
+    # No lanza: si lo hiciera, el suscriptor MQTT se reconectaria al broker y
+    # el frontend veria "sin senal" por un problema que es de la base.
+    changed = await service.apply_signal(SermoSignal(sermo=True, timestamp=publicado))
+
+    assert changed is False
+    assert service.get_current_state().sermo is False
+    assert recibidos == []
+
+    await asyncio.sleep(RETRY * 3)
+    repository.down = False
+    assert await wait_for(lambda: service.get_current_state().sermo is True)
+
+    assert len(repository.opened) == 1
+    # La operacion empieza cuando la FPGA lo dijo, no cuando volvio la base.
+    assert repository.opened[0]["started_at"] == publicado
+    assert acquisition.started == [repository.opened[0]["id"]]
+    assert recibidos == [True]
+    await service.shutdown()
+
+
+async def test_off_con_la_base_caida_se_reintenta_hasta_cerrar():
+    service, repository, acquisition = build_service()
+    await service.apply_signal(SermoSignal(sermo=True))
+    repository.down = True
+
+    assert await service.apply_signal(SermoSignal(sermo=False)) is False
+    # La toma de datos se corta igual: el reactor se detuvo de verdad.
+    assert acquisition.stops == 1
+    assert repository.closed == []
+
+    repository.down = False
+    assert await wait_for(lambda: service.get_current_state().sermo is False)
+    assert len(repository.closed) == 1
+    await service.shutdown()
+
+
+async def test_una_senal_nueva_reemplaza_a_la_pendiente():
+    # ON y OFF mientras la base esta caida: cuando vuelve no hay nada que
+    # abrir, el ultimo valor publicado es OFF.
+    service, repository, acquisition = build_service()
+    repository.down = True
+
+    await service.apply_signal(SermoSignal(sermo=True))
+    await service.apply_signal(SermoSignal(sermo=False))
+    repository.down = False
+    await asyncio.sleep(RETRY * 10)
+
+    assert repository.opened == []
+    assert acquisition.started == []
+    assert service.get_current_state().sermo is False
+
+
+async def test_on_mientras_el_cierre_esperaba_a_la_base_retoma_la_toma_de_datos():
+    # El OFF corto la toma de datos pero no llego a cerrar la operacion. Si
+    # el reactor vuelve a arrancar, ignorar el ON por idempotencia dejaria
+    # todo el ensayo sin muestras.
+    service, repository, acquisition = build_service()
+    await service.apply_signal(SermoSignal(sermo=True))
+    operation_id = service.get_current_state().operation_id
+    repository.down = True
+
+    await service.apply_signal(SermoSignal(sermo=False))
+    assert acquisition.running is False
+    await service.apply_signal(SermoSignal(sermo=True))
+
+    assert acquisition.running is True
+    assert acquisition.started == [operation_id, operation_id]
+    repository.down = False
+    await asyncio.sleep(RETRY * 10)
+
+    # Sigue siendo la misma operacion: nunca se cerro en la base.
+    assert len(repository.opened) == 1
+    assert repository.closed == []
+    assert service.get_current_state().operation_id == operation_id
+    await service.shutdown()
+
+
+async def test_shutdown_cancela_el_reintento_pendiente():
+    service, repository, _ = build_service()
+    repository.down = True
+    await service.apply_signal(SermoSignal(sermo=True))
+
+    await service.shutdown()
+    repository.down = False
+    await asyncio.sleep(RETRY * 10)
+
+    assert repository.opened == []
