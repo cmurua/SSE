@@ -107,6 +107,15 @@ def test_token_sin_subject():
         decode_access_token(sin_sub)
 
 
+def test_token_sin_vencimiento():
+    """Firmado por nosotros pero eterno: no se acepta. PyJWT solo valida `exp`
+    si viene, asi que hay que exigirlo explicitamente."""
+    eterno = forge({"sub": "jperez", "type": ACCESS_TOKEN_TYPE})
+
+    with pytest.raises(InvalidTokenError):
+        decode_access_token(eterno)
+
+
 def test_token_malformado():
     with pytest.raises(InvalidTokenError):
         decode_access_token("esto-no-es-un-jwt")

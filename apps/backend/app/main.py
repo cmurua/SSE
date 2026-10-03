@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, WebSocketException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -14,10 +14,12 @@ from app.api.v1.router import api_router
 from app.composition import build_reactor_runtime
 from app.config.logging import configure_logging
 from app.config.settings import get_settings
+from app.core.exceptions import websocket_exception_handler
 from app.db.session import get_db
+from app.websocket.dependencies import ACCESS_TOKEN_QUERY_PARAM
 
 settings = get_settings()
-configure_logging(settings.log_level)
+configure_logging(settings.log_level, redact_query_params=[ACCESS_TOKEN_QUERY_PARAM])
 
 
 @asynccontextmanager
@@ -54,6 +56,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Reemplaza el handler por defecto de Starlette para que un WebSocket
+# rechazado (p. ej. por token invalido) le entregue su codigo de cierre al
+# cliente en vez de un 403 opaco. Ver core/exceptions.py.
+app.add_exception_handler(WebSocketException, websocket_exception_handler)
 
 app.include_router(api_router, prefix="/api/v1")
 

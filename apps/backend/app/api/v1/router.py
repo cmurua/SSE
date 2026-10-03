@@ -18,7 +18,8 @@
 #
 # Ojo con los routers que mezclan REST y WebSocket (reactor-state, realtime):
 # la dependency a nivel router se aplicaria tambien al WS, donde HTTPBearer
-# no funciona. Esos se protegen endpoint por endpoint.
+# no funciona. Esos se protegen endpoint por endpoint: `user: CurrentUser` en
+# los REST y `user: CurrentUserWS` (app/websocket/dependencies.py) en los WS.
 from fastapi import APIRouter
 
 from app.domains.auth.router import router as auth_router

@@ -72,6 +72,10 @@ def decode_token(token: str, expected_type: str) -> dict:
             token,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
+            # PyJWT valida `exp` si esta, pero no exige que este. Un token sin
+            # vencimiento seria eterno, y los WebSocket programan su cierre a
+            # partir de este claim (ver websocket/dependencies.py).
+            options={"require": ["exp"]},
         )
     except jwt.ExpiredSignatureError as error:
         raise ExpiredTokenError("El token expiro") from error
