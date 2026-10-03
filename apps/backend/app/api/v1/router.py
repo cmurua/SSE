@@ -11,9 +11,14 @@
 #         dependencies=[Depends(get_current_user)],
 #     )
 #
-# Hoy no se protege ninguno a proposito: los endpoints todavia son stubs y
-# cada tarea decide si el suyo requiere sesion. Para proteger uno solo,
-# anotarlo con `user: CurrentUser` (ver domains/auth/dependencies.py).
+# Hoy no se protege ningun router entero: cada tarea decide si su endpoint
+# requiere sesion y lo anota con `user: CurrentUser` (ver
+# domains/auth/dependencies.py). Ya protegidos asi: GET /auth/me y
+# GET /reactor-state.
+#
+# Ojo con los routers que mezclan REST y WebSocket (reactor-state, realtime):
+# la dependency a nivel router se aplicaria tambien al WS, donde HTTPBearer
+# no funciona. Esos se protegen endpoint por endpoint.
 from fastapi import APIRouter
 
 from app.domains.auth.router import router as auth_router
