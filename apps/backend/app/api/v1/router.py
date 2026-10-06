@@ -26,12 +26,14 @@ from app.domains.auth.router import router as auth_router
 from app.domains.exports.router import router as exports_router
 from app.domains.help.router import router as help_router
 from app.domains.historicals.router import router as historicals_router
+from app.domains.reactor_data.router import router as reactor_data_router
 from app.domains.reactor_state.router import router as reactor_state_router
 from app.domains.realtime.router import router as realtime_router
 from app.domains.reports.router import router as reports_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
+api_router.include_router(reactor_data_router, prefix="/reactor-data", tags=["reactor-data"])
 api_router.include_router(reactor_state_router, prefix="/reactor-state", tags=["reactor-state"])
 api_router.include_router(realtime_router, prefix="/realtime", tags=["realtime"])
 api_router.include_router(historicals_router, prefix="/historicals", tags=["historicals"])
