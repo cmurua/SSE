@@ -191,6 +191,76 @@ async def test_serve_desuscribe_aunque_la_conexion_falle(manager):
     assert manager.subscriber_count(TOPIC) == 0
 
 
+# --- Mensaje inicial ---------------------------------------------------------
+
+INITIAL = {"type": "state_changed", "sermo": False}
+
+
+async def test_el_mensaje_inicial_es_lo_primero_que_recibe(manager):
+    a = FakeWebSocket("a")
+
+    await manager.connect(TOPIC, a, initial_message=lambda: INITIAL)
+    await manager.broadcast(TOPIC, MESSAGE)
+
+    assert a.received == [INITIAL, MESSAGE]
+
+
+async def test_el_mensaje_inicial_se_arma_al_suscribir_y_no_antes(manager):
+    """Si se armara al pedir la conexion, un cambio ocurrido mientras se
+    acepta no estaria en el mensaje inicial ni llegaria por broadcast (el
+    cliente todavia no estaba suscripto): el cliente se lo perderia."""
+    estado = {"sermo": False}
+    aceptando = asyncio.Event()
+    seguir = asyncio.Event()
+
+    class SlowAccept(FakeWebSocket):
+        async def accept(self) -> None:
+            aceptando.set()
+            await seguir.wait()
+
+    a = SlowAccept("a")
+    task = asyncio.create_task(
+        manager.connect(TOPIC, a, initial_message=lambda: {"sermo": estado["sermo"]})
+    )
+    await aceptando.wait()
+    # El cambio ocurre en medio del handshake; su broadcast no encuentra a
+    # nadie suscripto todavia.
+    estado["sermo"] = True
+    await manager.broadcast(TOPIC, {"sermo": True})
+    seguir.set()
+    await task
+
+    assert a.received == [{"sermo": True}]
+
+
+async def test_sin_mensaje_inicial_no_se_envia_nada(manager):
+    a = FakeWebSocket("a")
+
+    await manager.connect(TOPIC, a)
+
+    assert a.received == []
+    assert manager.subscriber_count(TOPIC) == 1
+
+
+async def test_si_el_mensaje_inicial_no_llega_no_queda_suscripto(manager):
+    caido = FakeWebSocket("caido", send_error=ConnectionResetError())
+
+    await manager.connect(TOPIC, caido, initial_message=lambda: INITIAL)
+
+    assert manager.subscriber_count(TOPIC) == 0
+
+
+async def test_serve_manda_el_mensaje_inicial(manager):
+    a = FakeWebSocket("a")
+    task = asyncio.create_task(manager.serve(TOPIC, a, initial_message=lambda: INITIAL))
+    await asyncio.sleep(0)
+
+    assert a.received == [INITIAL]
+
+    a.push({"type": "websocket.disconnect", "code": 1000})
+    await asyncio.wait_for(task, timeout=1)
+
+
 # --- De punta a punta --------------------------------------------------------
 
 

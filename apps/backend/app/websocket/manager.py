@@ -11,12 +11,17 @@ import asyncio
 import contextlib
 import json
 import logging
+from collections.abc import Callable
 
 from fastapi import WebSocket
 
 from app.websocket.events import WSCloseCode
 
 logger = logging.getLogger(__name__)
+
+# Arma el primer mensaje de una conexion. Es una funcion y no el mensaje ya
+# armado porque tiene que evaluarse en el momento de suscribir (ver connect).
+InitialMessage = Callable[[], dict]
 
 
 class ConnectionManager:
@@ -27,14 +32,34 @@ class ConnectionManager:
         # evita ademas que se le acumulen mensajes sin limite.
         self._send_timeout_seconds = send_timeout_seconds
 
-    async def connect(self, topic: str, websocket: WebSocket) -> None:
+    async def connect(
+        self,
+        topic: str,
+        websocket: WebSocket,
+        initial_message: InitialMessage | None = None,
+    ) -> None:
         """Acepta la conexion y la suscribe al topico.
 
         Se llama recien despues de autenticar (ver websocket/dependencies.py):
         aceptar es lo ultimo, no lo primero.
+
+        `initial_message`, si se pasa, es lo primero que recibe el cliente: lo
+        usa reactor.state para mandar el estado actual sin esperar al primer
+        cambio. Se evalua y se suscribe en el mismo paso, sin ceder el event
+        loop entre uno y otro, para que no se pierda un cambio:
+          - un cambio anterior ya esta en el mensaje inicial;
+          - uno posterior encuentra al cliente suscripto y le llega por
+            broadcast, despues del inicial porque ese envio arranco antes.
+        Lo peor que puede pasar es recibir el mismo estado dos veces, y por
+        eso cada evento lleva el estado completo y no la diferencia.
         """
         await websocket.accept()
+        text = None if initial_message is None else _serialize(initial_message())
         self._connections.setdefault(topic, set()).add(websocket)
+        if text is not None:
+            # Por el mismo camino que un broadcast: si el cliente no lo puede
+            # recibir, se lo descarta y no queda suscripto.
+            await self._send(websocket, text)
 
     def disconnect(self, topic: str, websocket: WebSocket) -> None:
         """Desuscribe del topico. Idempotente."""
@@ -48,7 +73,12 @@ class ConnectionManager:
     def subscriber_count(self, topic: str) -> int:
         return len(self._connections.get(topic, ()))
 
-    async def serve(self, topic: str, websocket: WebSocket) -> None:
+    async def serve(
+        self,
+        topic: str,
+        websocket: WebSocket,
+        initial_message: InitialMessage | None = None,
+    ) -> None:
         """Suscribe y mantiene la conexion hasta que el cliente se va.
 
         Es la forma recomendada de atender un WebSocket de solo bajada (el
@@ -60,7 +90,7 @@ class ConnectionManager:
         uvicorn hace ping/pong cada 20 s y, si no hay respuesta, entrega el
         websocket.disconnect.
         """
-        await self.connect(topic, websocket)
+        await self.connect(topic, websocket, initial_message)
         try:
             while True:
                 message = await websocket.receive()
@@ -83,8 +113,7 @@ class ConnectionManager:
         subscribers = list(self._connections.get(topic, ()))
         if not subscribers:
             return
-        # Mismo formato que WebSocket.send_json() de Starlette.
-        text = json.dumps(message, separators=(",", ":"), ensure_ascii=False)
+        text = _serialize(message)
         await asyncio.gather(*(self._send(websocket, text) for websocket in subscribers))
 
     async def _send(self, websocket: WebSocket, text: str) -> None:
@@ -118,6 +147,11 @@ class ConnectionManager:
         with contextlib.suppress(Exception):
             async with asyncio.timeout(self._send_timeout_seconds):
                 await websocket.close(code=close_code, reason="Cliente demasiado lento")
+
+
+def _serialize(message: dict) -> str:
+    # Mismo formato que WebSocket.send_json() de Starlette.
+    return json.dumps(message, separators=(",", ":"), ensure_ascii=False)
 
 
 manager = ConnectionManager()

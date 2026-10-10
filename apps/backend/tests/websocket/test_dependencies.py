@@ -1,8 +1,8 @@
 # Autenticacion del handshake WebSocket (get_current_user_ws). Se prueba por
 # WebSocket contra una app minima y no llamando a la funcion suelta, porque
 # el contrato es de protocolo: con que codigo se cierra y que el cliente no
-# reciba nada antes. Los endpoints WS reales (reactor-state, realtime) todavia
-# no existen; los arman las tareas 2.5 y siguientes con esta misma dependency.
+# reciba nada antes. Los endpoints WS reales (reactor-state, y realtime
+# cuando exista) usan esta misma dependency.
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -250,10 +250,9 @@ async def test_el_vencimiento_sobre_un_socket_muerto_no_deja_una_excepcion_suelt
 
 @pytest.mark.parametrize("url", ["/api/v1/reactor-state/ws", "/api/v1/realtime/ws"])
 def test_los_websocket_reales_exigen_sesion(url: str):
-    """Los cuerpos todavia son de tareas siguientes (2.5 y realtime), pero la
-    proteccion ya esta: sin token se cierra con 1008 y no se llega al
-    endpoint. Se usa la app real para cubrir tambien el handler registrado en
-    app/main.py."""
+    """Sin token se cierra con 1008 y no se llega al endpoint (el de
+    realtime todavia no tiene cuerpo, pero la proteccion ya esta). Se usa la
+    app real para cubrir tambien el handler registrado en app/main.py."""
     closed = connect_and_expect_close(TestClient(app), url)
 
     assert closed.code == WSCloseCode.POLICY_VIOLATION

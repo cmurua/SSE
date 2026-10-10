@@ -137,7 +137,9 @@ class AcquisitionService:
             # Se espera la cancelacion antes de devolver el control: quien
             # llama (ReactorStateService) cierra la operacion inmediatamente
             # despues, y una muestra escrita tras el `ended_at` quedaria
-            # fuera del intervalo de su propia operacion.
+            # fuera del intervalo de su propia operacion. Si el writer estaba
+            # en medio de un INSERT, la cancelacion espera a que termine
+            # (ver _flush).
             try:
                 await task
             except asyncio.CancelledError:
@@ -230,6 +232,19 @@ class AcquisitionService:
             delay = min(delay * 2, self._retry_max)
 
     def _enqueue(self, sample: AcquiredSample) -> None:
+        """Agrega una muestra leida; con el buffer lleno descarta la mas vieja.
+
+        CONSECUENCIA ACEPTADA: el lote que esta en vuelo no cuenta para el
+        tope, porque ya salio del buffer. Si el buffer se llena durante un
+        INSERT y ese INSERT termina bien -- la base volvio justo mientras se
+        intentaba --, lo descartado queda como hueco entre el lote y lo que
+        sigue. No hay forma de evitarlo con memoria acotada: el lote en vuelo
+        es lo mas viejo, pero ya no se lo puede descartar. Se optimiza para el
+        caso esperable con la base caida, que el INSERT falle: entonces
+        _restore() descarta lo mas viejo del lote y lo guardado sigue siendo
+        un tramo contiguo. El hueco, si ocurre, queda contado en el log de
+        "Base recuperada".
+        """
         if len(self._pending) == self._pending.maxlen:
             self._count_dropped(1)
         self._pending.append(sample)
@@ -260,42 +275,75 @@ class AcquisitionService:
     async def _flush(self) -> bool:
         """Guarda las muestras pendientes, en orden. True si no quedo ninguna.
 
-        Las saca del buffer ANTES de escribir: si cancelan la tarea durante el
-        INSERT, el thread termina igual y la transaccion se confirma; dejarlas
-        en el buffer haria que el stop() las vuelva a insertar duplicadas.
+        Las saca del buffer ANTES de escribir: el lote en vuelo es de este
+        llamado, y lo que lea _read_loop() mientras tanto se acumula aparte.
+        Al terminar, el lote se cuenta como guardado o vuelve al buffer.
         """
         if not self._pending:
             return True
 
         batch = list(self._pending)
         self._pending.clear()
-        try:
-            # El INSERT es sincronico (SQLAlchemy sync, como el resto del
-            # backend): se manda a un thread para no bloquear el event loop,
-            # que es el que atiende los WebSockets de tiempo real.
-            await asyncio.to_thread(
+        # El INSERT es sincronico (SQLAlchemy sync, como el resto del
+        # backend): se manda a un thread para no bloquear el event loop, que
+        # es el que atiende los WebSockets de tiempo real.
+        insert = asyncio.ensure_future(
+            asyncio.to_thread(
                 self._repository.insert_many,
                 batch[0].operation_id,
                 [(sample.timestamp, sample.values) for sample in batch],
             )
+        )
+        try:
+            await asyncio.shield(insert)
+        except asyncio.CancelledError:
+            # stop() cancelo el writer en medio del INSERT. El thread no se
+            # puede interrumpir: sigue y termina por su cuenta. Se lo espera
+            # para que stop() no devuelva el control con un INSERT todavia en
+            # vuelo -- quien llama cierra la operacion inmediatamente despues
+            # -- y para no perder el lote sin aviso si falla: vuelve al buffer
+            # y stop() lo reintenta en su ultimo volcado.
+            #
+            # Acotado por los timeouts del engine (app/db/session.py): con la
+            # base caida, el INSERT falla en segundos en vez de colgarse.
+            try:
+                await insert
+            except SQLAlchemyError as error:
+                self._insert_failed(batch, error)
+            else:
+                await self._insert_succeeded(batch)
+            raise
         except SQLAlchemyError as error:
-            # La base se cayo o se esta reiniciando. No se corta la toma de
-            # datos: las muestras vuelven al buffer y se reintenta mas tarde.
-            # El pool (pool_pre_ping) descarta las conexiones muertas, asi que
-            # cuando la base vuelve el proximo intento se reconecta solo.
-            self._restore(batch)
-            if not self._storage_down:
-                self._storage_down = True
-                logger.warning(
-                    "No se pudieron guardar muestras de %s (%s). Se conservan en "
-                    "memoria y se reintenta.",
-                    batch[0].operation_id,
-                    type(error).__name__,
-                )
+            self._insert_failed(batch, error)
             return False
 
+        await self._insert_succeeded(batch)
+        return True
+
+    def _insert_failed(
+        self, batch: list[AcquiredSample], error: SQLAlchemyError
+    ) -> None:
+        # La base se cayo o se esta reiniciando. No se corta la toma de
+        # datos: las muestras vuelven al buffer y se reintenta mas tarde. El
+        # pool (pool_pre_ping) descarta las conexiones muertas, asi que cuando
+        # la base vuelve el proximo intento se reconecta solo.
+        self._restore(batch)
+        if not self._storage_down:
+            self._storage_down = True
+            logger.warning(
+                "No se pudieron guardar muestras de %s (%s). Se conservan en "
+                "memoria y se reintenta.",
+                batch[0].operation_id,
+                type(error).__name__,
+            )
+
+    async def _insert_succeeded(self, batch: list[AcquiredSample]) -> None:
         self._samples += len(batch)
-        if self._storage_down:
+        # Tambien con descartes y sin falla previa: una base colgada (que no
+        # lanza, solo tarda) llena el buffer sin pasar por _insert_failed().
+        # Sin esto el conteo no se informaba ni se reiniciaba, y el siguiente
+        # desborde ya no avisaba (ver _count_dropped).
+        if self._storage_down or self._dropped:
             logger.info(
                 "Base recuperada: %d muestras guardadas con retraso, %d descartadas.",
                 len(batch),
@@ -306,7 +354,6 @@ class AcquisitionService:
 
         for sample in batch:
             await self._notify(sample)
-        return True
 
     async def _notify(self, sample: AcquiredSample) -> None:
         for listener in self._listeners:

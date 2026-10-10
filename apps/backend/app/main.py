@@ -16,6 +16,7 @@ from app.config.logging import configure_logging
 from app.config.settings import get_settings
 from app.core.exceptions import websocket_exception_handler
 from app.db.session import get_db
+from app.domains.reactor_state.router import publish_state_changed
 from app.websocket.dependencies import ACCESS_TOKEN_QUERY_PARAM
 
 settings = get_settings()
@@ -31,11 +32,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     apagar y que no queden tareas huerfanas entre recargas de `--reload`.
     """
     runtime = build_reactor_runtime(settings)
-    # Se publica en app.state para que los routers (GET /reactor-state, issue
-    # 2.2; WS reactor.state, issue 2.5) lean el mismo servicio y no construyan
-    # una segunda copia del estado.
+    # Se publica en app.state para que los routers (GET /reactor-state y WS
+    # /reactor-state/ws) lean el mismo servicio y no construyan una segunda
+    # copia del estado.
     app.state.reactor_runtime = runtime
     app.state.reactor_state_service = runtime.state
+    # Antes de start(): asi tambien se publican los primeros cambios, como el
+    # aviso de que la senal empezo a llegar al conectarse al broker.
+    runtime.state.register_listener(publish_state_changed)
 
     await runtime.start()
     try:
