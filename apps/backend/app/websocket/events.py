@@ -1,6 +1,9 @@
 # Catalogo de tipos de evento enviados por WebSocket. El frontend
 # (services/websocket/topics.ts) debe mantenerse en sync con estos nombres.
+# La forma de cada evento esta en docs/architecture/websocket-protocol.md.
 from enum import IntEnum, StrEnum
+
+from pydantic import BaseModel
 
 
 class WSTopic(StrEnum):
@@ -12,6 +15,16 @@ class WSEventType(StrEnum):
     SAMPLE = "sample"
     STATE_CHANGED = "state_changed"
     ERROR = "error"
+
+
+def build_event(event_type: WSEventType, data: BaseModel) -> dict:
+    """Sobre comun de todos los eventos: `{"type": ..., "data": ...}`.
+
+    `type` dice como interpretar `data`, asi el cliente despacha por un solo
+    campo sin adivinar por la forma del contenido. Devuelve un dict listo
+    para `manager.broadcast()`: `mode="json"` convierte fechas y enums.
+    """
+    return {"type": event_type.value, "data": data.model_dump(mode="json")}
 
 
 class WSCloseCode(IntEnum):

@@ -108,9 +108,12 @@ class ReactorStateService:
     def register_listener(self, listener: StateListener) -> None:
         """Registra un observador de cambios de estado.
 
-        Es el enganche para el WebSocket `reactor.state` (issue 2.5): ese
-        issue agrega un listener que hace broadcast de `state_changed`, sin
-        tocar este servicio.
+        Lo usa el WebSocket `reactor.state`: el lifespan (app/main.py)
+        registra `publish_state_changed()`, que hace broadcast de
+        `state_changed` sin que este servicio sepa nada de WebSocket.
+
+        Se avisa en cada cambio de `sermo` y tambien de `source_connected`:
+        el frontend necesita enterarse de las dos cosas (issue 2.6).
         """
         self._listeners.append(listener)
 

@@ -240,7 +240,7 @@ async def test_reconcile_sin_operacion_abierta_no_hace_nada():
 
 
 async def test_los_listeners_reciben_cada_cambio():
-    # Es el enganche del WebSocket reactor.state (issue 2.5).
+    # Es el enganche del WebSocket reactor.state (ver test_router.py).
     service, _, _ = build_service()
     recibidos = []
 

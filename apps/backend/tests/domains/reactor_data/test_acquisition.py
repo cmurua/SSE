@@ -262,9 +262,9 @@ async def test_stop_vuelca_lo_pendiente_antes_de_que_se_cierre_la_operacion():
     repository.down = False
     await service.stop()
 
-    # Espera breve: si la cancelacion cayo durante un INSERT, ese thread
-    # termina por su cuenta un instante despues del stop().
-    assert await wait_for(lambda: len(repository.rows) == len(source.reads))
+    # Sin esperar: cuando stop() devuelve el control ya no queda ningun
+    # INSERT en vuelo (la operacion se cierra inmediatamente despues).
+    assert len(repository.rows) == len(source.reads)
     assert len(set(stored_values(repository))) == len(source.reads)
     assert service.pending_samples == 0
 
@@ -342,11 +342,20 @@ async def test_si_se_atrasa_saltea_ticks_en_vez_de_leer_en_rafaga():
 
 
 class SlowFailingRepository(FakeSampleRepository):
-    """Falla despues de tardar: mientras tanto el lector sigue encolando."""
+    """Falla despues de tardar: mientras tanto el lector sigue encolando.
+
+    Si falla se decide al empezar, como con una base real: un intento lanzado
+    contra la base caida falla aunque la base vuelva mientras espera. Si se
+    decidiera al final, poner `down = False` en medio de un intento lo haria
+    terminar bien, y eso es otro caso (ver
+    test_si_la_base_vuelve_en_medio_de_un_volcado_el_hueco_queda_contado).
+    """
 
     def insert_many(self, operation_id, rows):
         if self.down:
             threading.Event().wait(INTERVAL * 4)
+            self.failed_inserts += 1
+            raise OperationalError("INSERT", {}, ConnectionRefusedError("base caida"))
         super().insert_many(operation_id, rows)
 
 
@@ -366,3 +375,95 @@ async def test_si_falla_un_volcado_con_el_buffer_lleno_se_descartan_las_mas_viej
     # hasta la ultima lectura. Descartar las mas nuevas dejaria huecos.
     assert valores == [float(n) for n in range(int(valores[0]), len(source.reads) + 1)]
     assert valores[0] > 1.0
+
+
+class BlockingRepository(FakeSampleRepository):
+    """Cada INSERT espera a que el test lo suelte, y avisa cuando empieza.
+
+    Sirve para hacer caer el stop() exactamente en medio de un INSERT, sin
+    depender de la suerte del scheduler.
+    """
+
+    def __init__(self, *, fail: bool = False):
+        super().__init__()
+        self.fail = fail
+        self.started = threading.Event()
+        self.released = threading.Event()
+
+    def insert_many(self, operation_id, rows):
+        self.started.set()
+        self.released.wait(timeout=5)
+        if self.fail:
+            self.fail = False  # solo el que estaba en vuelo
+            raise OperationalError("INSERT", {}, ConnectionRefusedError("base caida"))
+        super().insert_many(operation_id, rows)
+
+
+async def stop_during_insert(service, repository):
+    """Llama a stop() con un INSERT en vuelo y lo suelta recien despues."""
+    await asyncio.to_thread(repository.started.wait, 2)
+    stopping = asyncio.create_task(service.stop())
+    await asyncio.sleep(INTERVAL * 3)
+    assert not stopping.done(), "stop() no espero al INSERT en vuelo"
+    repository.released.set()
+    await asyncio.wait_for(stopping, timeout=2)
+
+
+async def test_stop_espera_al_insert_en_vuelo():
+    # Antes stop() devolvia el control con el INSERT todavia corriendo en su
+    # thread: las filas aparecian despues de cerrada la operacion.
+    repository = BlockingRepository()
+    service, source, _ = build(repository=repository)
+
+    await service.start("OP-2026-001", datetime.now(UTC))
+    await stop_during_insert(service, repository)
+
+    assert len(repository.rows) == len(source.reads)
+    assert service.samples_written == len(source.reads)
+
+
+async def test_si_el_insert_en_vuelo_falla_al_detener_se_reintenta():
+    # Antes el lote en vuelo se perdia sin aviso: la cancelacion salteaba el
+    # codigo que lo devuelve al buffer.
+    repository = BlockingRepository(fail=True)
+    service, source, _ = build(repository=repository)
+
+    await service.start("OP-2026-001", datetime.now(UTC))
+    await stop_during_insert(service, repository)
+
+    assert stored_values(repository) == [float(n) for n in range(1, len(source.reads) + 1)]
+    assert service.pending_samples == 0
+
+
+class RecoveringRepository(FakeSampleRepository):
+    """El primer INSERT tarda y termina bien: la base estaba colgada, o
+    volvio mientras se intentaba."""
+
+    def __init__(self):
+        super().__init__()
+        self.slow_once = True
+
+    def insert_many(self, operation_id, rows):
+        if self.slow_once:
+            self.slow_once = False
+            threading.Event().wait(INTERVAL * 6)
+        super().insert_many(operation_id, rows)
+
+
+async def test_si_la_base_vuelve_en_medio_de_un_volcado_el_hueco_queda_contado(caplog):
+    """Consecuencia aceptada y documentada en AcquisitionService._enqueue():
+    el lote en vuelo ya no se puede descartar, asi que si el buffer se llena
+    mientras tanto se pierden muestras posteriores a el. Lo que se exige es
+    que no pase en silencio."""
+    repository = RecoveringRepository()
+    service, source, _ = build(repository=repository, max_pending_samples=2)
+
+    with caplog.at_level("INFO", logger="app.domains.reactor_data.acquisition"):
+        await service.start("OP-2026-001", datetime.now(UTC))
+        assert await wait_for(lambda: len(repository.rows) > 1)
+        await service.stop()
+
+    guardadas = len(repository.rows)
+    assert guardadas < len(source.reads)
+    assert "descartadas" in caplog.text
+    assert f"{len(source.reads) - guardadas} descartadas" in caplog.text
