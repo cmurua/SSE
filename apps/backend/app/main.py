@@ -17,7 +17,9 @@ from app.config.settings import get_settings
 from app.core.exceptions import websocket_exception_handler
 from app.db.session import get_db
 from app.domains.reactor_state.router import publish_state_changed
+from app.domains.realtime.service import RealtimeService
 from app.websocket.dependencies import ACCESS_TOKEN_QUERY_PARAM
+from app.websocket.manager import manager
 
 settings = get_settings()
 configure_logging(settings.log_level, redact_query_params=[ACCESS_TOKEN_QUERY_PARAM])
@@ -40,6 +42,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Antes de start(): asi tambien se publican los primeros cambios, como el
     # aviso de que la senal empezo a llegar al conectarse al broker.
     runtime.state.register_listener(publish_state_changed)
+
+    # Tiempo real (RF05): cada muestra guardada se reparte a los clientes de
+    # realtime.samples, y al terminar la operacion se los cierra. Ver
+    # docs/decisions/0006-mecanismo-lectura-tiempo-real.md.
+    realtime = RealtimeService(reactor_state=runtime.state, manager=manager)
+    app.state.realtime_service = realtime
+    runtime.acquisition.register_listener(realtime.publish_sample)
+    runtime.state.register_listener(realtime.on_state_changed)
 
     await runtime.start()
     try:

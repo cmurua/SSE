@@ -57,6 +57,16 @@ class FakeAcquisition:
         self.started = []
         self.stops = 0
         self.running = False
+        self.listeners = []
+
+    def register_listener(self, listener):
+        # El lifespan registra aca el reparto de realtime.samples (3.2).
+        self.listeners.append(listener)
+
+    async def emit(self, sample):
+        """Simula una muestra recien guardada, como lo hace _notify()."""
+        for listener in self.listeners:
+            await listener(sample)
 
     async def start(self, operation_id, started_at):
         self.started.append(operation_id)

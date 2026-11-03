@@ -250,8 +250,7 @@ async def test_el_vencimiento_sobre_un_socket_muerto_no_deja_una_excepcion_suelt
 
 @pytest.mark.parametrize("url", ["/api/v1/reactor-state/ws", "/api/v1/realtime/ws"])
 def test_los_websocket_reales_exigen_sesion(url: str):
-    """Sin token se cierra con 1008 y no se llega al endpoint (el de
-    realtime todavia no tiene cuerpo, pero la proteccion ya esta). Se usa la
+    """Sin token se cierra con 1008 y no se llega al endpoint. Se usa la
     app real para cubrir tambien el handler registrado en app/main.py."""
     closed = connect_and_expect_close(TestClient(app), url)
 

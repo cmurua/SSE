@@ -7,7 +7,7 @@ import json
 import time
 
 import pytest
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, WebSocketException
 from fastapi.testclient import TestClient
 
 from app.websocket.events import WSCloseCode
@@ -259,6 +259,131 @@ async def test_serve_manda_el_mensaje_inicial(manager):
 
     a.push({"type": "websocket.disconnect", "code": 1000})
     await asyncio.wait_for(task, timeout=1)
+
+
+# --- Mensajes del cliente (on_text) -----------------------------------------
+
+
+async def test_serve_entrega_los_textos_del_cliente_en_orden(manager):
+    a = FakeWebSocket("a")
+    recibidos = []
+
+    async def on_text(text: str) -> None:
+        recibidos.append(text)
+
+    task = asyncio.create_task(manager.serve(TOPIC, a, on_text=on_text))
+    a.push({"type": "websocket.receive", "text": "uno"})
+    a.push({"type": "websocket.receive", "bytes": b"binario"})
+    a.push({"type": "websocket.receive", "text": "dos"})
+    a.push({"type": "websocket.disconnect", "code": 1000})
+    await asyncio.wait_for(task, timeout=1)
+
+    # Los binarios se descartan: ningun topico los usa.
+    assert recibidos == ["uno", "dos"]
+
+
+# --- Rechazo en el mensaje inicial -------------------------------------------
+
+
+async def test_un_mensaje_inicial_que_rechaza_no_suscribe(manager):
+    """realtime.samples rechaza asi con el reactor detenido: la excepcion
+    sale de connect() y el handler de core/exceptions.py cierra."""
+    a = FakeWebSocket("a")
+
+    def rechazar() -> dict:
+        raise WebSocketException(code=4409, reason="no")
+
+    with pytest.raises(WebSocketException):
+        await manager.connect(TOPIC, a, initial_message=rechazar)
+
+    assert manager.subscriber_count(TOPIC) == 0
+    assert a.received == []
+
+
+# --- broadcast_each ----------------------------------------------------------
+
+
+async def test_broadcast_each_manda_a_cada_uno_lo_suyo(manager):
+    a, b, nadie = FakeWebSocket("a"), FakeWebSocket("b"), FakeWebSocket("nadie")
+    await subscribe(manager, TOPIC, a, b, nadie)
+    mensajes = {a: {"para": "a"}, b: {"para": "b"}}
+
+    await manager.broadcast_each(TOPIC, mensajes.get)
+
+    assert a.received == [{"para": "a"}]
+    assert b.received == [{"para": "b"}]
+    assert nadie.received == []
+
+
+async def test_broadcast_each_serializa_una_vez_por_mensaje(manager, monkeypatch):
+    from app.websocket import manager as manager_module
+
+    serializados = []
+    original = manager_module._serialize
+
+    def contar(message):
+        serializados.append(message)
+        return original(message)
+
+    monkeypatch.setattr(manager_module, "_serialize", contar)
+    sockets = [FakeWebSocket(str(i)) for i in range(5)]
+    await subscribe(manager, TOPIC, *sockets)
+    compartido = {"type": "sample"}
+
+    await manager.broadcast_each(TOPIC, lambda websocket: compartido)
+
+    assert len(serializados) == 1
+    assert all(ws.received == [compartido] for ws in sockets)
+
+
+async def test_broadcast_each_descarta_al_cliente_caido_sin_cortar_al_resto(manager):
+    sano = FakeWebSocket("sano")
+    caido = FakeWebSocket("caido", send_error=ConnectionResetError())
+    await subscribe(manager, TOPIC, sano, caido)
+
+    await manager.broadcast_each(TOPIC, lambda websocket: MESSAGE)
+
+    assert sano.received == [MESSAGE]
+    assert manager.subscriber_count(TOPIC) == 1
+
+
+# --- close_topic / send -------------------------------------------------------
+
+
+async def test_close_topic_cierra_y_desuscribe_a_todos_los_del_topico(manager):
+    a, b, ajeno = FakeWebSocket("a"), FakeWebSocket("b"), FakeWebSocket("ajeno")
+    await subscribe(manager, TOPIC, a, b)
+    await subscribe(manager, OTHER_TOPIC, ajeno)
+
+    await manager.close_topic(TOPIC, 4409, "fin")
+
+    assert (a.close_code, b.close_code) == (4409, 4409)
+    assert ajeno.close_code is None
+    assert manager.subscriber_count(TOPIC) == 0
+    assert manager.subscriber_count(OTHER_TOPIC) == 1
+
+
+async def test_close_topic_no_espera_a_un_cliente_que_no_acepta_el_cierre(manager):
+    class NoCierra(FakeWebSocket):
+        async def close(self, code: int = 1000, reason: str | None = None) -> None:
+            await asyncio.Event().wait()
+
+    colgado, normal = NoCierra("colgado"), FakeWebSocket("normal")
+    await subscribe(manager, TOPIC, colgado, normal)
+
+    await asyncio.wait_for(manager.close_topic(TOPIC, 4409, "fin"), timeout=1)
+
+    assert normal.close_code == 4409
+
+
+async def test_send_le_llega_solo_a_ese_cliente(manager):
+    a, b = FakeWebSocket("a"), FakeWebSocket("b")
+    await subscribe(manager, TOPIC, a, b)
+
+    await manager.send(a, MESSAGE)
+
+    assert a.received == [MESSAGE]
+    assert b.received == []
 
 
 # --- De punta a punta --------------------------------------------------------
