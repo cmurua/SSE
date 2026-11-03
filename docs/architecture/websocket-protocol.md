@@ -5,7 +5,7 @@
 | Topico | Endpoint | Que publica |
 |---|---|---|
 | `reactor.state` | `/api/v1/reactor-state/ws` | Cambios de estado SERMO/operacion |
-| `realtime.samples` | `/api/v1/realtime/ws` | Nuevas muestras mientras el reactor opera (tarea 3.2) |
+| `realtime.samples` | `/api/v1/realtime/ws` | Muestras nuevas, solo de las variables que elige el cliente, mientras el reactor opera |
 
 El origen de `reactor.state` es la senal MQTT de la FPGA, no la base: ver
 `docs/architecture/mqtt-protocol.md`. No confundir los topicos MQTT
@@ -17,8 +17,10 @@ deben reflejarse en `apps/frontend/src/services/websocket/topics.ts`
 si el contrato crece, evaluar generarlo desde un esquema compartido
 (ver "packages/" en la explicacion de la estructura).
 
-Los canales son de **solo bajada**: el servidor publica y el cliente escucha.
-Lo que mande el cliente se descarta.
+`reactor.state` es de **solo bajada**: el servidor publica y el cliente
+escucha; lo que mande el cliente se descarta. `realtime.samples` acepta un
+unico mensaje del cliente, `subscribe`, para elegir que variables recibir
+(ver abajo).
 
 ## Autenticacion
 
@@ -47,6 +49,7 @@ no recibe ningun dato, solo el cierre.
 | `1008` | Falta el token, es invalido o es un refresh | No reintentar: volver al login |
 | `4401` | El token vencio (en el handshake o con la conexion abierta) | Renovar con `POST /auth/refresh` y reconectar con el token nuevo |
 | `1013` | El cliente no consumia los mensajes a tiempo | Reconectar con backoff |
+| `4409` | Solo `realtime.samples`: el reactor no opera. Al conectarse con SERMO apagado, o al terminar la operacion | No reintentar en loop: esperar a que `reactor.state` informe `sermo: true` y reconectar |
 | `1006` | Corte sin cierre (red, servidor caido) | Reconectar con backoff |
 
 El motivo (`reason`) acompana al codigo como texto para humanos; el cliente
@@ -81,8 +84,9 @@ arma `build_event()` en el mismo archivo del backend.
 | Tipo | Topico | Estado |
 |---|---|---|
 | `state_changed` | `reactor.state` | Definido (abajo) |
-| `sample` | `realtime.samples` | Reservado: lo define la tarea 3.2 |
-| `error` | — | Reservado, sin uso todavia |
+| `subscribed` | `realtime.samples` | Definido (abajo) |
+| `sample` | `realtime.samples` | Definido (abajo) |
+| `error` | `realtime.samples` | Definido (abajo) |
 
 ### `state_changed` (topico `reactor.state`)
 
@@ -132,3 +136,106 @@ garantiza es no perder un cambio entre el estado inicial y el primer evento.
 Si la conexion se cae, el cliente reconecta (ver codigos de cierre) y el
 primer mensaje de la nueva conexion lo pone al dia: no hace falta consultar
 el GET para rellenar el hueco.
+
+## `realtime.samples`
+
+Muestras del reactor en vivo (RF05). Existe **solo mientras el reactor
+opera** (RF04): la regla la decide `ReactorStateService`, este topico solo la
+consulta. Las muestras no se leen de la base: se reparten en el mismo proceso
+apenas se guardan (ADR 0006), asi que lo que se ve en vivo es exactamente lo
+que despues muestran los historicos de esa operacion.
+
+### Ciclo de vida
+
+1. El cliente se conecta (con token, como cualquier WS).
+   - Reactor detenido: el servidor cierra con **`4409`** sin enviar nada.
+   - Reactor operando: el primer mensaje es `subscribed` con la operacion en
+     curso y **ninguna variable**. Hasta que el cliente elija, no recibe
+     muestras.
+2. El cliente manda `subscribe` con las variables que quiere ver. El servidor
+   responde `subscribed` (o `error`) y desde la siguiente muestra envia solo
+   esas. Se puede repetir cuantas veces haga falta **sin reconectar**.
+3. Cada muestra guardada llega como `sample`, a ~1 Hz.
+4. Al terminar la operacion (SERMO OFF) el servidor cierra con **`4409`**,
+   despues de haber enviado las ultimas muestras. Perder la senal MQTT
+   (`source_connected: false` en `reactor.state`) **no** corta el stream.
+
+Un cliente nunca cambia de operacion: una operacion nueva es una conexion
+nueva. Por eso el buffer del cliente se descarta al reconectar.
+
+### `subscribe` (cliente -> servidor)
+
+```json
+{ "type": "subscribe", "variables": ["LOGA1", "POTM4"] }
+```
+
+- `variables` es la **seleccion completa**, no un agregado: reemplaza la
+  anterior. `[]` deja de recibir muestras sin cortar la conexion.
+- IDs del catalogo (`GET /api/v1/reactor-data/variables`).
+- **Hasta 2** variables (RF05). Los repetidos cuentan una vez; el orden se
+  conserva (Variable A, Variable B).
+- Un pedido invalido responde `error` y **deja la seleccion anterior
+  intacta**.
+
+### `subscribed`
+
+Confirma la seleccion vigente. Se envia al conectarse y como respuesta a cada
+`subscribe` aceptado.
+
+```json
+{
+  "type": "subscribed",
+  "data": { "operation_id": "OP-2026-014", "variables": ["LOGA1", "POTM4"] }
+}
+```
+
+Las muestras reflejan la seleccion vigente al momento de publicarse: puede
+llegar una muestra con la seleccion nueva un instante antes que su
+`subscribed`.
+
+### `sample`
+
+```json
+{
+  "type": "sample",
+  "data": {
+    "operation_id": "OP-2026-014",
+    "timestamp": "2026-11-03T14:03:27.512000Z",
+    "values": { "LOGA1": 1032.5, "POTM4": 5.1 }
+  }
+}
+```
+
+| Campo | Tipo | Significado |
+|---|---|---|
+| `operation_id` | `string` | Operacion a la que pertenece la muestra |
+| `timestamp` | `string` (ISO 8601, UTC) | Momento en que se tomo la muestra; es el que queda en la base |
+| `values` | `{ [id]: number \| null }` | Solo las variables elegidas, por ID del catalogo. `null` = el canal no publico nada en esa muestra (no es un 0 medido) |
+
+Schemas en `app/domains/realtime/schemas.py`.
+
+### `error`
+
+Un mensaje del cliente que no se pudo atender. La conexion sigue abierta.
+
+```json
+{
+  "type": "error",
+  "data": { "code": "too_many_variables", "message": "Se pueden seguir hasta 2 variables a la vez" }
+}
+```
+
+| `code` | Cuando |
+|---|---|
+| `invalid_message` | No es JSON, o no tiene la forma de `subscribe` |
+| `unknown_variable` | Algun ID no existe en el catalogo |
+| `too_many_variables` | Mas de 2 variables |
+
+`message` es texto para humanos; el cliente decide por `code`.
+
+### Costo por cliente
+
+Cada muestra se arma y serializa **una vez por seleccion distinta**, no por
+cliente (`ConnectionManager.broadcast_each`): 100 clientes mirando las mismas
+dos variables cuestan una serializacion. Un cliente sin variables elegidas no
+recibe nada.

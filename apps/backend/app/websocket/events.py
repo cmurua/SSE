@@ -13,7 +13,10 @@ class WSTopic(StrEnum):
 
 class WSEventType(StrEnum):
     SAMPLE = "sample"
+    # realtime.samples: confirma la seleccion de variables del cliente.
+    SUBSCRIBED = "subscribed"
     STATE_CHANGED = "state_changed"
+    # Un mensaje del cliente que no se pudo atender. La conexion sigue.
     ERROR = "error"
 
 
@@ -44,3 +47,9 @@ class WSCloseCode(IntEnum):
     # 401, la misma convencion que usa graphql-ws. El token vencio: renovar con
     # el refresh token y reconectar.
     TOKEN_EXPIRED = 4401
+    # Rango privado, por analogia con HTTP 409 (Conflict): el pedido choca con
+    # el estado actual. realtime.samples solo existe mientras el reactor opera
+    # (RF04): se cierra con este codigo al intentar conectarse con SERMO
+    # apagado y al terminar la operacion. No reintentar en loop: esperar a
+    # que reactor.state informe sermo = true.
+    REACTOR_NOT_OPERATING = 4409
