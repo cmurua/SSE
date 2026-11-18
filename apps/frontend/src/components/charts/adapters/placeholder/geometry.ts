@@ -1,7 +1,8 @@
-// Geometria del grafico variable vs. tiempo: escalas, marcas de los ejes,
-// trazados y que eje usa cada variable. Funciones puras, sin React ni DOM,
-// para probarlas sin renderizar. PlaceholderChartAdapter solo dibuja lo que
-// devuelve computeTimeChart.
+// Geometria del grafico, en sus dos modos (variable vs. tiempo y variable
+// vs. variable): escalas, marcas de los ejes, trazados y que eje usa cada
+// variable. Funciones puras, sin React ni DOM, para probarlas sin renderizar.
+// PlaceholderChartAdapter solo dibuja lo que devuelven computeTimeChart y
+// computeXYChart.
 import type { ChartPoint, ChartVariable } from "../../types";
 
 export const PADDING = { top: 16, bottom: 42, left: 64, right: 24, rightDual: 64 };
@@ -115,7 +116,7 @@ export function formatClock(t: number, withSeconds: boolean): string {
 /** Hueco a partir del cual se corta la linea: GAP_FACTOR veces la mediana
  *  del intervalo entre muestras. Se deduce de los datos para que sirva igual
  *  a 1 Hz en vivo que con otra cadencia en los historicos. */
-export function gapThreshold(points: readonly ChartPoint[]): number {
+export function gapThreshold(points: readonly { t: number }[]): number {
   if (points.length < 2) return Infinity;
   const deltas: number[] = [];
   for (let i = 1; i < points.length; i++) deltas.push(points[i].t - points[i - 1].t);
@@ -124,9 +125,9 @@ export function gapThreshold(points: readonly ChartPoint[]): number {
 }
 
 /** Parte la serie donde hay un hueco mayor que `maxGap`. */
-export function splitAtGaps(points: readonly ChartPoint[], maxGap: number): ChartPoint[][] {
-  const segments: ChartPoint[][] = [];
-  let current: ChartPoint[] = [];
+export function splitAtGaps<P extends { t: number }>(points: readonly P[], maxGap: number): P[][] {
+  const segments: P[][] = [];
+  let current: P[] = [];
   for (const point of points) {
     const previous = current[current.length - 1];
     if (previous !== undefined && point.t - previous.t > maxGap) {
@@ -306,4 +307,141 @@ export function computeTimeChart({
   }));
 
   return { plot, series: layouts, yAxes, xTicks, domain: [x0, x1] };
+}
+
+// --- Variable vs. variable (X·Y) ----------------------------------------
+
+/** Un instante en que las dos variables tienen valor. */
+export interface XYPair {
+  t: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * Empareja las dos series por timestamp: un par es un `t` que esta en las
+ * dos. Cada muestra del servidor trae las dos variables con el mismo
+ * `timestamp`, asi que coinciden exacto. Si un canal publico `null` en una
+ * muestra, ese instante falta en su serie y no forma par.
+ *
+ * No se empareja por indice (como el prototipo): un solo `null` desfasaria
+ * todos los pares siguientes sin que nada lo muestre.
+ */
+export function pairByTimestamp(
+  xs: readonly ChartPoint[],
+  ys: readonly ChartPoint[],
+): XYPair[] {
+  const pairs: XYPair[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < xs.length && j < ys.length) {
+    const a = xs[i];
+    const b = ys[j];
+    if (a.t === b.t) {
+      pairs.push({ t: a.t, x: a.v, y: b.v });
+      i++;
+      j++;
+    } else if (a.t < b.t) {
+      i++;
+    } else {
+      j++;
+    }
+  }
+  return pairs;
+}
+
+export interface XYAxisLayout {
+  title: string;
+  /** Posicion en px (x para el eje X, y para el eje Y) y etiqueta. */
+  ticks: { at: number; label: string }[];
+}
+
+export interface XYChartLayout {
+  plot: { left: number; top: number; width: number; height: number };
+  /** Trayectoria: los pares en orden de tiempo, cortada en los huecos. */
+  line: string;
+  /** Pares sueltos (tramo de un solo par), marcados con un punto. */
+  dots: { x: number; y: number }[];
+  /** El par mas reciente, resaltado: "donde esta ahora". */
+  current: { x: number; y: number };
+  xAxis: XYAxisLayout;
+  yAxis: XYAxisLayout;
+  /** Intervalo de tiempo de los pares dibujados (epoch ms). */
+  domain: [number, number];
+}
+
+/**
+ * Variable B (eje Y) en funcion de la Variable A (eje X), o null si faltan
+ * variables o todavia no hay ningun par.
+ *
+ * Con `timeWindowMs` se dibujan solo los pares de esa ventana, terminando en
+ * la ultima muestra: el mismo periodo que muestra el modo tiempo.
+ */
+export function computeXYChart({
+  variables,
+  data,
+  width,
+  height,
+  timeWindowMs,
+}: TimeChartInput): XYChartLayout | null {
+  if (variables.length < 2) return null;
+  const [vx, vy] = variables;
+  const xs = data[vx.id] ?? [];
+  const ys = data[vy.id] ?? [];
+  const all = pairByTimestamp(xs, ys);
+  if (all.length === 0) return null;
+
+  const t1 = all[all.length - 1].t;
+  const pairs = timeWindowMs === undefined ? all : all.filter((p) => p.t >= t1 - timeWindowMs);
+
+  const plot = {
+    left: PADDING.left,
+    top: PADDING.top,
+    width: Math.max(1, width - PADDING.left - PADDING.right),
+    height: Math.max(1, height - PADDING.top - PADDING.bottom),
+  };
+  const bottom = plot.top + plot.height;
+
+  const axisScale = (values: number[], count: number) => {
+    let lo = Math.min(...values);
+    let hi = Math.max(...values);
+    const pad = (hi - lo) * Y_PADDING;
+    [lo, hi] = [lo - pad, hi + pad];
+    return niceScale(lo, hi, count);
+  };
+  const niceX = axisScale(
+    pairs.map((p) => p.x),
+    Math.max(2, Math.floor(plot.width / X_TICK_MIN_PX)),
+  );
+  const niceY = axisScale(pairs.map((p) => p.y), Y_TICK_TARGET);
+  const xScale = linearScale(niceX.min, niceX.max, plot.left, plot.left + plot.width);
+  const yScale = linearScale(niceY.min, niceY.max, bottom, plot.top);
+
+  const lines: string[] = [];
+  const dots: { x: number; y: number }[] = [];
+  for (const segment of splitAtGaps(pairs, gapThreshold(all))) {
+    const coords = segment.map((p) => [xScale(p.x), yScale(p.y)] as const);
+    if (coords.length === 1) {
+      dots.push({ x: coords[0][0], y: coords[0][1] });
+      continue;
+    }
+    lines.push(coords.map(([x, y], i) => `${i === 0 ? "M" : "L"} ${px(x)} ${px(y)}`).join(" "));
+  }
+
+  const last = pairs[pairs.length - 1];
+  return {
+    plot,
+    line: lines.join(" "),
+    dots,
+    current: { x: xScale(last.x), y: yScale(last.y) },
+    xAxis: {
+      title: `${vx.name} [${vx.unit}]`,
+      ticks: niceX.ticks.map((v) => ({ at: xScale(v), label: formatTick(v, niceX.step) })),
+    },
+    yAxis: {
+      title: `${vy.name} [${vy.unit}]`,
+      ticks: niceY.ticks.map((v) => ({ at: yScale(v), label: formatTick(v, niceY.step) })),
+    },
+    domain: [pairs[0].t, last.t],
+  };
 }

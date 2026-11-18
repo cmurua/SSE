@@ -29,4 +29,9 @@ Modo `time`:
 - La linea se corta si entre dos muestras pasa mas de 3 veces el intervalo
   tipico, para no esconder un corte de datos.
 
-Modo `xy`: pendiente (tarea 3.6).
+Modo `xy`: la Variable B (eje Y) en funcion de la A (eje X).
+- Los pares se arman por timestamp, no por indice: un instante que falta
+  en una serie (un `null` del canal) no forma par ni desfasa los demas.
+- Se dibuja la trayectoria en orden de tiempo, con el ultimo par
+  resaltado. Usa la misma `timeWindowMs` que el modo tiempo y se corta en
+  los huecos igual.

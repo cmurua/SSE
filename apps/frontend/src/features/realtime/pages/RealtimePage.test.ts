@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import i18n from "@/i18n";
-import { realtimeScreen, streamOperationId } from "./RealtimePage";
+import { displayedChartMode, realtimeScreen, streamOperationId } from "./RealtimePage";
 
 describe("realtimeScreen", () => {
   it("habilita el modulo solo con el reactor operando (RF04)", () => {
@@ -22,6 +22,15 @@ describe("realtimeScreen", () => {
     // `state` es el ultimo valor recibido: sigue ahi aunque la conexion de
     // reactor.state se haya cortado, asi que el stream no se cierra.
     expect(streamOperationId({ sermo: true, operation_id: "OP-1" })).toBe("OP-1");
+  });
+
+  it("muestra el modo X·Y solo con 2 variables, sin olvidar que se eligio", () => {
+    expect(displayedChartMode("time", 2)).toBe("time");
+    expect(displayedChartMode("xy", 2)).toBe("xy");
+    // Con una sola variable no hay X·Y...
+    expect(displayedChartMode("xy", 1)).toBe("time");
+    expect(displayedChartMode("xy", 0)).toBe("time");
+    // ...pero el modo elegido sigue siendo "xy": al volver a 2, vuelve solo.
   });
 
   // Claves que usa la pagina. Si se agrega una, sumarla aca.
@@ -50,11 +59,17 @@ describe("realtimeScreen", () => {
     "realtime.subscribeErrors.unknown_variable",
     "realtime.subscribeErrors.too_many_variables",
     "realtime.subscribeErrors.generic",
-    "realtime.chartTitle",
+    "realtime.mode.label",
+    "realtime.mode.time",
+    "realtime.mode.xy",
+    "realtime.mode.xyNeedsTwo",
     "chart.empty.title",
     "chart.empty.lead",
     "chart.waiting",
-    "chart.xyPending",
+    "chart.xyNeedsTwo",
+    "chart.axisX",
+    "chart.axisY",
+    "chart.ariaXY",
     "chart.timeAxis",
     "chart.axisLeft",
     "chart.axisRight",

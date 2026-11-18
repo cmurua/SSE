@@ -343,3 +343,26 @@ input[type="range"] {
 .series-tick {
   fill: var(--series);
 }
+
+/* Modo variable vs. variable: la trayectoria es de las dos variables, asi
+   que va en un neutro; el ultimo par se resalta ("donde esta ahora"). */
+.chart-trajectory {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.chart-trajectory-point {
+  fill: var(--ink-2);
+}
+.chart-current {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+/* Selector de modo del grafico (RealtimePage) */
+.bg-app {
+  background-color: var(--bg);
+}

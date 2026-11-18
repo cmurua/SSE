@@ -68,9 +68,30 @@ describe("PlaceholderChartAdapter", () => {
     );
   });
 
-  it("el modo X·Y avisa que todavia no esta (tarea 3.6)", () => {
-    const html = render({ variables: [POT, REA], mode: "xy" });
-    expect(html).toContain("todavia no esta disponible");
+  it("modo X·Y: dibuja la trayectoria y resalta el par actual, con A en X y B en Y", () => {
+    const html = render({
+      variables: [POT, REA],
+      data: { POTM4: points([5, 5.1, 5.2]), REACTM4: points([0, 10, 20]) },
+      mode: "xy",
+    });
+    expect(html).toContain('aria-label="Grafico de Reactividad en funcion de Potencia"');
+    expect(html.match(/class="chart-trajectory"/g)).toHaveLength(1);
+    expect(html.match(/class="chart-current"/g)).toHaveLength(1);
+    expect(html).toContain("Potencia [W]");
+    expect(html).toContain("Reactividad [pcm]");
+    expect(html).toContain("eje X");
+    expect(html).toContain("eje Y");
+    expect(html).not.toContain("series-stroke");
+  });
+
+  it("modo X·Y con una sola variable explica que hacen falta 2", () => {
+    const html = render({ variables: [POT], data: { POTM4: points([5]) }, mode: "xy" });
+    expect(html).toContain("Elija 2 variables");
     expect(html).not.toContain("<svg");
+  });
+
+  it("modo X·Y sin pares todavia espera los datos", () => {
+    const html = render({ variables: [POT, REA], data: { POTM4: points([5]) }, mode: "xy" });
+    expect(html).toContain("Esperando datos");
   });
 });

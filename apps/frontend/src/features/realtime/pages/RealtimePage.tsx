@@ -12,7 +12,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { ChartRenderer } from "@/components/charts/ChartRenderer";
-import type { ChartVariable } from "@/components/charts/types";
+import type { ChartMode, ChartVariable } from "@/components/charts/types";
 import { IAlert } from "@/components/icons";
 import type { ReactorView } from "@/store/reactorStateStore";
 import type { RealtimeError } from "@/types/realtime";
@@ -51,6 +51,13 @@ export function streamOperationId(state: { sermo: boolean; operation_id: string 
   return state?.sermo ? state.operation_id : null;
 }
 
+/** Modo que se muestra: el elegido, salvo que no haya 2 variables para el
+ *  X·Y. Se guarda el elegido aparte para que, si se quita la Variable B y se
+ *  elige otra, el grafico vuelva solo a X·Y. */
+export function displayedChartMode(preferred: ChartMode, variableCount: number): ChartMode {
+  return preferred === "xy" && variableCount < 2 ? "time" : preferred;
+}
+
 export function RealtimePage() {
   const { t } = useTranslation("common");
   const { view, connection, state } = useReactorState();
@@ -59,6 +66,9 @@ export function RealtimePage() {
   // La seleccion y el stream viven aca y no en RealtimeAvailable, para que
   // sobrevivan a que esa pantalla se desmonte por un corte de reactor.state.
   const [selection, setSelection] = useState<string[]>(() => [...DEFAULT_SELECTION]);
+  // El modo es solo de presentacion: no se le pasa al hook, asi que
+  // cambiarlo no toca la conexion ni el buffer.
+  const [preferredMode, setPreferredMode] = useState<ChartMode>("time");
   const realtime = useRealtimeSocket({
     operationId: streamOperationId(state),
     variables: selection,
@@ -71,6 +81,8 @@ export function RealtimePage() {
         <RealtimeAvailable
           selection={selection}
           onSelectionChange={setSelection}
+          preferredMode={preferredMode}
+          onModeChange={setPreferredMode}
           realtime={realtime}
         />
       )}
@@ -83,15 +95,19 @@ export function RealtimePage() {
   );
 }
 
-// TODO(Milestone 3): el modo variable vs. variable (3.6) y el panel de valor
-// instantaneo y metadatos de la operacion (3.7) se completan en sus tareas.
+// TODO(Milestone 3): el panel de valor instantaneo y metadatos de la
+// operacion (3.7) se completa en su tarea.
 function RealtimeAvailable({
   selection,
   onSelectionChange,
+  preferredMode,
+  onModeChange,
   realtime,
 }: {
   selection: string[];
   onSelectionChange: (selection: string[]) => void;
+  preferredMode: ChartMode;
+  onModeChange: (mode: ChartMode) => void;
   realtime: RealtimeSnapshot;
 }) {
   const { t } = useTranslation("common");
@@ -104,6 +120,7 @@ function RealtimeAvailable({
       .filter((v) => v !== undefined)
       .map(({ id, name, unit }): ChartVariable => ({ id, name, unit }));
   }, [catalog.data, selection]);
+  const mode = displayedChartMode(preferredMode, chartVariables.length);
 
   return (
     <div className="grid grid-cols-12 gap-5">
@@ -119,15 +136,61 @@ function RealtimeAvailable({
       </aside>
       <section className="col-span-12 lg:col-span-8 xl:col-span-9 space-y-4">
         {realtime.error && <SubscribeError error={realtime.error} />}
+        <ModeToggle
+          mode={mode}
+          xyAvailable={chartVariables.length >= 2}
+          onChange={onModeChange}
+        />
         <ChartRenderer
           variables={chartVariables}
           data={realtime.series}
-          mode="time"
-          title={t("realtime.chartTitle")}
+          mode={mode}
+          title={t(`realtime.mode.${mode}`)}
           height={360}
           timeWindowMs={REALTIME_WINDOW_MS}
         />
       </section>
+    </div>
+  );
+}
+
+/** "Variable vs. tiempo" / "Variable vs. variable", como en el prototipo. */
+function ModeToggle({
+  mode,
+  xyAvailable,
+  onChange,
+}: {
+  mode: ChartMode;
+  xyAvailable: boolean;
+  onChange: (mode: ChartMode) => void;
+}) {
+  const { t } = useTranslation("common");
+  const option = (value: ChartMode, disabled = false) => (
+    <button
+      type="button"
+      onClick={() => onChange(value)}
+      disabled={disabled}
+      aria-pressed={mode === value}
+      title={disabled ? t("realtime.mode.xyNeedsTwo") : undefined}
+      className={
+        "px-3 py-1 text-[12px] rounded-full font-medium " +
+        (mode === value ? "bg-surface shadow-sm" : "text-muted") +
+        (disabled ? " opacity-40 cursor-not-allowed" : "")
+      }
+    >
+      {t(`realtime.mode.${value}`)}
+    </button>
+  );
+
+  return (
+    <div className="card flex flex-wrap items-center gap-3 px-4 py-3">
+      <div role="group" aria-label={t("realtime.mode.label")} className="flex items-center gap-1 bg-app rounded-full p-1">
+        {option("time")}
+        {option("xy", !xyAvailable)}
+      </div>
+      {!xyAvailable && (
+        <span className="text-[11px] text-muted">{t("realtime.mode.xyNeedsTwo")}</span>
+      )}
     </div>
   );
 }
