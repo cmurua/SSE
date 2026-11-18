@@ -9,7 +9,13 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { seriesAt } from "../../series";
 import type { ChartRendererProps } from "../../types";
-import { computeTimeChart, type TimeChartLayout, type YAxisLayout } from "./geometry";
+import {
+  computeTimeChart,
+  computeXYChart,
+  type TimeChartLayout,
+  type XYChartLayout,
+  type YAxisLayout,
+} from "./geometry";
 
 const DEFAULT_HEIGHT = 360;
 /** Ancho antes de medir el contenedor (y en tests, donde no se mide). */
@@ -48,19 +54,37 @@ export function PlaceholderChartAdapter({
   const [ref, width] = useElementWidth();
   const shown = variables.slice(0, 2);
 
-  let body: ReactNode;
-  let layout: TimeChartLayout | null = null;
+  // `chart` es el SVG, o null si hay que mostrar un mensaje en su lugar.
+  let chart: ReactNode = null;
+  let message: ReactNode = null;
+  let axisLabels: string[] = [];
   if (shown.length === 0) {
-    body = <Message title={t("chart.empty.title")} lead={t("chart.empty.lead")} />;
+    message = <Message title={t("chart.empty.title")} lead={t("chart.empty.lead")} />;
   } else if (mode === "xy") {
-    // TODO(3.6): modo variable vs. variable.
-    body = <Message title={t("chart.xyPending")} />;
+    const layout =
+      shown.length < 2 ? null : computeXYChart({ variables: shown, data, width, height, timeWindowMs });
+    if (shown.length < 2) {
+      message = <Message title={t("chart.xyNeedsTwo")} />;
+    } else if (layout === null) {
+      message = <Message title={t("chart.waiting")} />;
+    } else {
+      axisLabels = [t("chart.axisX"), t("chart.axisY")];
+      chart = (
+        <XYChart
+          layout={layout}
+          width={width}
+          height={height}
+          label={t("chart.ariaXY", { x: shown[0].name, y: shown[1].name })}
+        />
+      );
+    }
   } else {
-    layout = computeTimeChart({ variables: shown, data, width, height, timeWindowMs });
-    body =
-      layout === null ? (
-        <Message title={t("chart.waiting")} />
-      ) : (
+    const layout = computeTimeChart({ variables: shown, data, width, height, timeWindowMs });
+    if (layout === null) {
+      message = <Message title={t("chart.waiting")} />;
+    } else {
+      if (layout.yAxes.length === 2) axisLabels = [t("chart.axisLeft"), t("chart.axisRight")];
+      chart = (
         <TimeChart
           layout={layout}
           width={width}
@@ -69,9 +93,9 @@ export function PlaceholderChartAdapter({
           timeTitle={t("chart.timeAxis")}
         />
       );
+    }
   }
 
-  const dual = layout?.yAxes.length === 2;
   return (
     <div ref={ref} className="card overflow-hidden">
       {(title || shown.length > 0) && (
@@ -86,11 +110,7 @@ export function PlaceholderChartAdapter({
                   <span className="font-mono font-semibold series-text">{series?.label}</span>
                   <span className="font-medium">{variable.name}</span>
                   <span className="text-muted font-mono">[{variable.unit}]</span>
-                  {dual && (
-                    <span className="text-muted">
-                      {t(index === 0 ? "chart.axisLeft" : "chart.axisRight")}
-                    </span>
-                  )}
+                  {axisLabels[index] && <span className="text-muted">{axisLabels[index]}</span>}
                 </div>
               );
             })}
@@ -100,7 +120,7 @@ export function PlaceholderChartAdapter({
       {/* Los mensajes ocupan el mismo alto que el grafico, para que la
           pagina no salte al llegar la primera muestra. Estilo inline porque
           el alto es una prop, no un valor fijo. */}
-      {layout === null ? <div style={{ height }}>{body}</div> : body}
+      {chart ?? <div style={{ height }}>{message}</div>}
     </div>
   );
 }
@@ -211,5 +231,82 @@ function YAxis({ axis, plot }: { axis: YAxisLayout; plot: TimeChartLayout["plot"
         {axis.title}
       </text>
     </g>
+  );
+}
+
+/** Variable B en funcion de la A. La trayectoria es de las dos variables y no
+ *  de una, asi que va en un color neutro; el azul y el ambar quedan en los
+ *  ejes, para leer cual es cual. */
+function XYChart({
+  layout,
+  width,
+  height,
+  label,
+}: {
+  layout: XYChartLayout;
+  width: number;
+  height: number;
+  label: string;
+}) {
+  const clipId = "chart-clip-" + useId().replace(/:/g, "");
+  const { plot, xAxis, yAxis, current } = layout;
+  const bottom = plot.top + plot.height;
+  const right = plot.left + plot.width;
+  const yTitleY = plot.top + plot.height / 2;
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
+      <defs>
+        <clipPath id={clipId}>
+          <rect x={plot.left} y={plot.top} width={plot.width} height={plot.height} />
+        </clipPath>
+      </defs>
+
+      <rect className="chart-bg" x={plot.left} y={plot.top} width={plot.width} height={plot.height} />
+      {yAxis.ticks.map((tick) => (
+        <line key={"gy" + tick.label} className="chart-grid" x1={plot.left} x2={right} y1={tick.at} y2={tick.at} />
+      ))}
+      {xAxis.ticks.map((tick) => (
+        <line key={"gx" + tick.label} className="chart-grid" x1={tick.at} x2={tick.at} y1={plot.top} y2={bottom} />
+      ))}
+
+      <g clipPath={`url(#${clipId})`}>
+        {layout.line && <path className="chart-trajectory" d={layout.line} />}
+        {layout.dots.map((dot, i) => (
+          <circle key={i} className="chart-trajectory-point" cx={dot.x} cy={dot.y} r={2} />
+        ))}
+        <circle className="chart-current" cx={current.x} cy={current.y} r={4.5} />
+      </g>
+
+      {/* Eje X: Variable A */}
+      <g className={seriesAt(0)?.className}>
+        {xAxis.ticks.map((tick) => (
+          <text key={"xt" + tick.label} className="chart-tick series-tick" x={tick.at} y={bottom + 16} textAnchor="middle">
+            {tick.label}
+          </text>
+        ))}
+        <text className="chart-axis-title series-tick" x={plot.left + plot.width / 2} y={bottom + 34} textAnchor="middle">
+          {xAxis.title}
+        </text>
+      </g>
+
+      {/* Eje Y: Variable B */}
+      <g className={seriesAt(1)?.className}>
+        {yAxis.ticks.map((tick) => (
+          <text key={"yt" + tick.label} className="chart-tick series-tick" x={plot.left - 8} y={tick.at + 3.5} textAnchor="end">
+            {tick.label}
+          </text>
+        ))}
+        <text
+          className="chart-axis-title series-tick"
+          x={14}
+          y={yTitleY}
+          textAnchor="middle"
+          transform={`rotate(-90 14 ${yTitleY})`}
+        >
+          {yAxis.title}
+        </text>
+      </g>
+    </svg>
   );
 }

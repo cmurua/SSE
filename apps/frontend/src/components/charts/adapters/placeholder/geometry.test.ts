@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { ChartPoint, ChartVariable } from "../../types";
 import {
   computeTimeChart,
+  computeXYChart,
+  pairByTimestamp,
   formatClock,
   formatTick,
   gapThreshold,
@@ -182,5 +184,87 @@ describe("computeTimeChart", () => {
     })!;
     const numbers = chart.series[0].line.split(" ").filter((s) => !/[A-Z]/.test(s));
     expect(numbers.every((n) => Number.isFinite(Number(n)))).toBe(true);
+  });
+});
+
+describe("pairByTimestamp", () => {
+  it("empareja los valores tomados en el mismo instante", () => {
+    expect(pairByTimestamp(series([1, 2, 3]), series([10, 20, 30]))).toEqual([
+      { t: T0, x: 1, y: 10 },
+      { t: T0 + 1000, x: 2, y: 20 },
+      { t: T0 + 2000, x: 3, y: 30 },
+    ]);
+  });
+
+  it("un instante que falta en una serie (null del canal) no forma par ni desfasa los demas", () => {
+    // B no publico en t=1: emparejar por indice uniria 2 con 30 y 3 con nada.
+    const b = [series([10])[0], ...series([30], 2)];
+    expect(pairByTimestamp(series([1, 2, 3]), b)).toEqual([
+      { t: T0, x: 1, y: 10 },
+      { t: T0 + 2000, x: 3, y: 30 },
+    ]);
+  });
+
+  it("sin instantes en comun no hay pares", () => {
+    expect(pairByTimestamp(series([1, 2]), series([5, 6], 10))).toEqual([]);
+    expect(pairByTimestamp([], series([1]))).toEqual([]);
+  });
+});
+
+describe("computeXYChart", () => {
+  const size = { width: 800, height: 360 };
+
+  it("null con menos de 2 variables o sin pares", () => {
+    expect(computeXYChart({ ...size, variables: [POT], data: { POTM4: series([1]) } })).toBeNull();
+    expect(computeXYChart({ ...size, variables: [POT, REA], data: { POTM4: series([1]) } })).toBeNull();
+  });
+
+  it("A en el eje X y B en el eje Y, cada uno con nombre y unidad", () => {
+    const chart = computeXYChart({
+      ...size,
+      variables: [POT, REA],
+      data: { POTM4: series([4, 5, 6]), REACTM4: series([-100, 0, 100]) },
+    })!;
+    expect(chart.xAxis.title).toBe("Potencia [W]");
+    expect(chart.yAxis.title).toBe("Reactividad [pcm]");
+    const xs = chart.xAxis.ticks.map((t) => Number(t.label));
+    const ys = chart.yAxis.ticks.map((t) => Number(t.label));
+    expect(Math.min(...xs)).toBeLessThanOrEqual(4);
+    expect(Math.max(...xs)).toBeGreaterThanOrEqual(6);
+    expect(Math.min(...ys)).toBeLessThanOrEqual(-100);
+    expect(Math.max(...ys)).toBeGreaterThanOrEqual(100);
+  });
+
+  it("resalta el par mas reciente", () => {
+    const chart = computeXYChart({
+      ...size,
+      variables: [POT, REA],
+      data: { POTM4: series([4, 5, 6]), REACTM4: series([-100, 0, 100]) },
+    })!;
+    // El ultimo par (6, 100) es el final de la trayectoria y, en estos datos,
+    // el de mas a la derecha y mas arriba (y menor en px).
+    expect(chart.line.endsWith(`${chart.current.x.toFixed(1)} ${chart.current.y.toFixed(1)}`)).toBe(true);
+    const coords = chart.line.match(/[\d.]+ [\d.]+/g)!.map((pair) => pair.split(" ").map(Number));
+    expect(chart.current.x).toBeCloseTo(Math.max(...coords.map(([x]) => x)), 0);
+    expect(chart.current.y).toBeCloseTo(Math.min(...coords.map(([, y]) => y)), 0);
+  });
+
+  it("con ventana, solo dibuja los pares de esa ventana", () => {
+    const data = {
+      POTM4: [{ t: T0, v: 1000 }, ...series([5, 5.1], 100)],
+      REACTM4: [{ t: T0, v: 0 }, ...series([0, 1], 100)],
+    };
+    const chart = computeXYChart({ ...size, variables: [POT, REA], data, timeWindowMs: 10_000 })!;
+    expect(chart.domain).toEqual([T0 + 100_000, T0 + 101_000]);
+    expect(Math.max(...chart.xAxis.ticks.map((t) => Number(t.label)))).toBeLessThan(6);
+  });
+
+  it("corta la trayectoria en un hueco de tiempo", () => {
+    const data = {
+      POTM4: [...series([1, 2, 3]), ...series([4, 5], 30)],
+      REACTM4: [...series([1, 2, 3]), ...series([4, 5], 30)],
+    };
+    const chart = computeXYChart({ ...size, variables: [POT, REA], data })!;
+    expect(chart.line.match(/M /g)).toHaveLength(2);
   });
 });
