@@ -11,6 +11,10 @@ import type { RealtimeSample } from "@/types/realtime";
  *  viejos, para que una operacion larga no haga crecer la memoria. */
 export const REALTIME_WINDOW_POINTS = 300;
 
+/** Lo que cubre la ventana en tiempo, a la cadencia de 1 Hz de la toma de
+ *  datos. Es el ancho del eje X del grafico en vivo. */
+export const REALTIME_WINDOW_MS = REALTIME_WINDOW_POINTS * 1000;
+
 export interface RealtimeBuffer {
   /** Operacion a la que pertenecen los datos. null = todavia ninguna. */
   operationId: string | null;

@@ -20,6 +20,7 @@ import { VariableSelector } from "../components/VariableSelector";
 import { useReactorState } from "../hooks/useReactorState";
 import { useRealtimeSocket, type RealtimeSnapshot } from "../hooks/useRealtimeSocket";
 import { useVariableCatalog } from "../hooks/useVariableCatalog";
+import { REALTIME_WINDOW_MS } from "../services/realtimeBuffer";
 import { DEFAULT_SELECTION } from "../services/variableSelection";
 
 export type RealtimeScreen = "available" | "unavailable" | "unknown" | "loading";
@@ -82,8 +83,8 @@ export function RealtimePage() {
   );
 }
 
-// TODO(Milestone 3): el grafico (3.5, 3.6) y el panel de valor instantaneo
-// y metadatos de la operacion (3.7) se completan en sus tareas.
+// TODO(Milestone 3): el modo variable vs. variable (3.6) y el panel de valor
+// instantaneo y metadatos de la operacion (3.7) se completan en sus tareas.
 function RealtimeAvailable({
   selection,
   onSelectionChange,
@@ -93,6 +94,7 @@ function RealtimeAvailable({
   onSelectionChange: (selection: string[]) => void;
   realtime: RealtimeSnapshot;
 }) {
+  const { t } = useTranslation("common");
   const catalog = useVariableCatalog();
 
   const chartVariables = useMemo(() => {
@@ -121,7 +123,9 @@ function RealtimeAvailable({
           variables={chartVariables}
           data={realtime.series}
           mode="time"
+          title={t("realtime.chartTitle")}
           height={360}
+          timeWindowMs={REALTIME_WINDOW_MS}
         />
       </section>
     </div>
