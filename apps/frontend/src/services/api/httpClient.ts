@@ -37,10 +37,12 @@ export class ApiError extends Error {
 let accessToken: string | null = null;
 let refreshToken: string | null = null;
 let onAuthFailure: (() => void) | null = null;
+const sessionListeners = new Set<() => void>();
 
 export function setSessionTokens(tokens: SessionTokens | null): void {
   accessToken = tokens?.accessToken ?? null;
   refreshToken = tokens?.refreshToken ?? null;
+  for (const listener of sessionListeners) listener();
 }
 
 export function getAccessToken(): string | null {
@@ -53,7 +55,20 @@ export function setOnAuthFailure(handler: (() => void) | null): void {
   onAuthFailure = handler;
 }
 
-function forceLogout(): void {
+/** Avisa cada vez que se inicia o se cierra la sesion (incluido el logout
+ *  forzado). Lo usan las conexiones que viven mas alla de una request, como
+ *  los WebSocket, para cerrarse al hacer logout. Una renovacion del access
+ *  token NO avisa: la sesion sigue siendo la misma. Devuelve la funcion para
+ *  desuscribirse. */
+export function subscribeToSession(listener: () => void): () => void {
+  sessionListeners.add(listener);
+  return () => sessionListeners.delete(listener);
+}
+
+/** Cierra una sesion que ya no se puede recuperar. Exportado para el cliente
+ *  WebSocket, que se entera de un token rechazado por el codigo de cierre y
+ *  no por un 401. */
+export function forceLogout(): void {
   setSessionTokens(null);
   onAuthFailure?.();
 }
@@ -77,7 +92,8 @@ const NO_REFRESH_PATHS: readonly string[] = [
 ];
 
 async function requestNewAccessToken(): Promise<string | null> {
-  if (refreshToken === null) return null;
+  // Vacio en la sesion de desarrollo (devSession.ts), que no tiene refresh.
+  if (!refreshToken) return null;
 
   // fetch directo y no `request()`: pasar por el cliente haria que un 401 del
   // propio refresh volviera a intentar refrescar, en bucle.
@@ -103,7 +119,10 @@ async function requestNewAccessToken(): Promise<string | null> {
   return accessToken;
 }
 
-function refreshAccessToken(): Promise<string | null> {
+/** Renueva el access token, o null si la sesion no se puede recuperar.
+ *  Exportado para el cliente WebSocket, que ante un cierre 4401 renueva por
+ *  aca y comparte el mismo refresh en vuelo que las requests REST. */
+export function refreshAccessToken(): Promise<string | null> {
   if (refreshInFlight !== null) return refreshInFlight;
 
   refreshInFlight = requestNewAccessToken()
