@@ -161,7 +161,11 @@ que despues muestran los historicos de esa operacion.
    (`source_connected: false` en `reactor.state`) **no** corta el stream.
 
 Un cliente nunca cambia de operacion: una operacion nueva es una conexion
-nueva. Por eso el buffer del cliente se descarta al reconectar.
+nueva. El cliente descarta su buffer cuando cambia el `operation_id`, no en
+cada reconexion: tras un corte de red dentro de la misma operacion conserva
+lo que tenia, y el hueco queda a la vista porque el eje X es el `timestamp`.
+Cada conexion nueva arranca **sin variables**, asi que al reconectar el
+cliente tiene que volver a mandar `subscribe`.
 
 ### `subscribe` (cliente -> servidor)
 
