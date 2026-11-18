@@ -4,5 +4,6 @@
   "institution": "Universidad Nacional de Cordoba",
   "faculty": "Facultad de Ciencias Exactas, Fisicas y Naturales",
   "nav": { "home": "Home", "realtime": "Real time", "historicals": "History", "reports": "Suggestions", "help": "Help", "about": "About RA-0", "logout": "Log out", "welcome": "Welcome" },
+  "sermo": { "label": "SERMO", "on": "ON", "off": "OFF", "unknown": "--", "status": { "operating": "OPERATING", "stopped": "STOPPED", "disconnected": "NO CONNECTION", "connecting": "CONNECTING" }, "hint": { "operating": "The reactor is OPERATING", "stopped": "The reactor is stopped", "serverLost": "No connection to the server: reactor state unknown", "signalLost": "The server is not receiving the reactor signal: state unknown", "connecting": "Connecting to the server" } },
   "footer": { "version": "SSE-330 v1.0.0", "readOnly": "RA-0 · Read-only system" }
 }

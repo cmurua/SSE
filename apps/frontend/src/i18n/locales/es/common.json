@@ -4,5 +4,6 @@
   "institution": "Universidad Nacional de Cordoba",
   "faculty": "Facultad de Ciencias Exactas, Fisicas y Naturales",
   "nav": { "home": "Inicio", "realtime": "Tiempo Real", "historicals": "Historicos", "reports": "Sugerencias", "help": "Ayuda", "about": "Conozca el RA-0", "logout": "Cerrar sesion", "welcome": "Bienvenido" },
+  "sermo": { "label": "SERMO", "on": "ON", "off": "OFF", "unknown": "--", "status": { "operating": "OPERACION", "stopped": "DETENIDO", "disconnected": "SIN CONEXION", "connecting": "CONECTANDO" }, "hint": { "operating": "El reactor esta en modo OPERACION", "stopped": "El reactor esta detenido", "serverLost": "Sin conexion con el servidor: no se sabe si el reactor opera", "signalLost": "El servidor no recibe la senal del reactor: no se sabe si opera", "connecting": "Conectando con el servidor" } },
   "footer": { "version": "SSE-330 v1.0.0", "readOnly": "RA-0 · Sistema de solo lectura" }
 }

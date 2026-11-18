@@ -30,6 +30,17 @@
   --img-placeholder: #d8dadd;
   --focus-ring: rgba(51, 90, 72, 0.15);
 
+  /* Indicador SERMO del header (AppShell), sobre --green-800. "on" sale del
+     prototipo (Shell.jsx); "lost" (sin conexion) no existia en el prototipo:
+     ambar claro, distinto del verde de "operando" y legible sobre el header,
+     cosa que --warn no es. "off" usa blancos translucidos, como el prototipo. */
+  --sermo-on: #3ecf8e;
+  --sermo-on-halo: rgba(62, 207, 142, 0.35);
+  --sermo-on-text: #9bf0c4;
+  --sermo-lost: #f2b84b;
+  --sermo-lost-halo: rgba(242, 184, 75, 0.3);
+  --sermo-lost-text: #f6cf85;
+
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }

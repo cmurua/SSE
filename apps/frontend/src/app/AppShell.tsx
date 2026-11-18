@@ -1,10 +1,11 @@
 // Layout: header verde + nav + footer institucional. Puerto directo de
 // Shell.jsx del prototipo (misma estructura y clases), con react-router
 // <Outlet/> en vez de children por prop y <NavLink> en vez de onNav().
-// El indicador SERMO del prototipo NO se porta aca: va en el issue #2.7.
+// El indicador SERMO vive en su propio archivo (SermoIndicator.tsx).
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuthContext } from "./providers/AuthProvider";
+import { SermoIndicator } from "./SermoIndicator";
 import { IHelp, ILogOut } from "@/components/icons";
 
 const NAV_ITEMS = [
@@ -50,6 +51,7 @@ export function AppShell() {
           </div>
 
           <div className="flex items-center gap-5">
+            <SermoIndicator />
             {user && (
               <div className="hidden md:flex items-center gap-2 text-[13px]">
                 <span className="text-white/85">
@@ -69,10 +71,13 @@ export function AppShell() {
             <button
               type="button"
               onClick={handleLogout}
-              className="flex items-center gap-1.5 text-[13px] text-white/85 hover:text-white"
+              aria-label={t("nav.logout")}
+              className="flex items-center gap-1.5 text-[13px] text-white/85 hover:text-white whitespace-nowrap"
             >
               <ILogOut size={14} />
-              <span>{t("nav.logout")}</span>
+              {/* Solo el icono en pantallas chicas, para que entre el
+                  indicador SERMO. */}
+              <span className="hidden sm:inline">{t("nav.logout")}</span>
             </button>
           </div>
         </div>
