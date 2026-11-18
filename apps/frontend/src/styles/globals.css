@@ -307,3 +307,39 @@ input[type="range"] {
 .hover-surface:hover:not(:disabled) {
   background-color: var(--surface-hover);
 }
+
+/* Grafico SVG (components/charts/adapters/placeholder). Las series se
+   pintan con --series (ver .series-a / .series-b), los ejes con los tokens
+   neutros. Van despues de las clases series-* para que .series-tick le gane
+   a .chart-tick en el texto de un eje con color. */
+.chart-bg {
+  fill: var(--surface-hover);
+}
+.chart-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.chart-tick {
+  fill: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.chart-axis-title {
+  fill: var(--label);
+  font-size: 11px;
+}
+.series-stroke {
+  fill: none;
+  stroke: var(--series);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.series-area {
+  fill: var(--series);
+  fill-opacity: 0.12;
+}
+.series-point,
+.series-tick {
+  fill: var(--series);
+}
