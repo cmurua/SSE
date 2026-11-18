@@ -16,6 +16,8 @@ import type { ChartMode, ChartVariable } from "@/components/charts/types";
 import { IAlert } from "@/components/icons";
 import type { ReactorView } from "@/store/reactorStateStore";
 import type { RealtimeError } from "@/types/realtime";
+import { InstantValuePanel } from "../components/InstantValuePanel";
+import { OperationStrip } from "../components/OperationStrip";
 import { VariableSelector } from "../components/VariableSelector";
 import { useReactorState } from "../hooks/useReactorState";
 import { useRealtimeSocket, type RealtimeSnapshot } from "../hooks/useRealtimeSocket";
@@ -51,6 +53,14 @@ export function streamOperationId(state: { sermo: boolean; operation_id: string 
   return state?.sermo ? state.operation_id : null;
 }
 
+/** Inicio de la operacion en curso. Con SERMO encendido, `updated_at` es el
+ *  instante con que el backend abrio la operacion (ver `updated_at` en
+ *  docs/architecture/websocket-protocol.md); con SERMO apagado no hay
+ *  operacion. */
+export function operationStartedAt(state: { sermo: boolean; updated_at: string } | null) {
+  return state?.sermo ? state.updated_at : null;
+}
+
 /** Modo que se muestra: el elegido, salvo que no haya 2 variables para el
  *  X·Y. Se guarda el elegido aparte para que, si se quita la Variable B y se
  *  elige otra, el grafico vuelva solo a X·Y. */
@@ -84,6 +94,10 @@ export function RealtimePage() {
           preferredMode={preferredMode}
           onModeChange={setPreferredMode}
           realtime={realtime}
+          // La operacion la informa el servidor del stream; mientras no
+          // llegue, la de reactor.state.
+          operationId={realtime.operationId ?? state?.operation_id ?? null}
+          startedAt={operationStartedAt(state)}
         />
       )}
       {screen === "unavailable" && <RealtimeUnavailable />}
@@ -95,31 +109,35 @@ export function RealtimePage() {
   );
 }
 
-// TODO(Milestone 3): el panel de valor instantaneo y metadatos de la
-// operacion (3.7) se completa en su tarea.
 function RealtimeAvailable({
   selection,
   onSelectionChange,
   preferredMode,
   onModeChange,
   realtime,
+  operationId,
+  startedAt,
 }: {
   selection: string[];
   onSelectionChange: (selection: string[]) => void;
   preferredMode: ChartMode;
   onModeChange: (mode: ChartMode) => void;
   realtime: RealtimeSnapshot;
+  operationId: string | null;
+  startedAt: string | null;
 }) {
   const { t } = useTranslation("common");
   const catalog = useVariableCatalog();
 
-  const chartVariables = useMemo(() => {
+  // Variables elegidas con sus datos del catalogo (unidad, rango), en orden.
+  const selectedVariables = useMemo(() => {
     const byId = new Map((catalog.data ?? []).map((v) => [v.id, v]));
-    return selection
-      .map((id) => byId.get(id))
-      .filter((v) => v !== undefined)
-      .map(({ id, name, unit }): ChartVariable => ({ id, name, unit }));
+    return selection.map((id) => byId.get(id)).filter((v) => v !== undefined);
   }, [catalog.data, selection]);
+  const chartVariables = useMemo(
+    () => selectedVariables.map(({ id, name, unit }): ChartVariable => ({ id, name, unit })),
+    [selectedVariables],
+  );
   const mode = displayedChartMode(preferredMode, chartVariables.length);
 
   return (
@@ -135,6 +153,14 @@ function RealtimeAvailable({
         />
       </aside>
       <section className="col-span-12 lg:col-span-8 xl:col-span-9 space-y-4">
+        <OperationStrip
+          operationId={operationId}
+          startedAt={startedAt}
+          connection={realtime.connection}
+          hasSelection={selection.length > 0}
+          lastSampleAt={realtime.lastSampleAt}
+          receivedAt={realtime.receivedAt}
+        />
         {realtime.error && <SubscribeError error={realtime.error} />}
         <ModeToggle
           mode={mode}
@@ -148,6 +174,11 @@ function RealtimeAvailable({
           title={t(`realtime.mode.${mode}`)}
           height={360}
           timeWindowMs={REALTIME_WINDOW_MS}
+        />
+        <InstantValuePanel
+          variables={selectedVariables}
+          series={realtime.series}
+          lastSampleAt={realtime.lastSampleAt}
         />
       </section>
     </div>

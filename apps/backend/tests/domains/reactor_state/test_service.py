@@ -125,6 +125,26 @@ async def test_sermo_on_abre_operacion_y_arranca_la_toma_de_datos():
     assert acquisition.started == [state.operation_id]
 
 
+async def test_con_sermo_on_updated_at_es_el_inicio_de_la_operacion():
+    # Contrato que usa el frontend (tarea 3.7) para mostrar la hora de inicio
+    # y la duracion: no hay otro endpoint que la informe mientras se opera.
+    # Ver `updated_at` en docs/architecture/websocket-protocol.md.
+    service, repository, _ = build_service()
+    publicado = datetime(2026, 11, 18, 14, 0, 12, 345678, tzinfo=UTC)
+
+    await service.apply_signal(SermoSignal(sermo=True, timestamp=publicado))
+
+    state = service.get_current_state()
+    assert state.updated_at == repository.opened[0]["started_at"] == publicado
+
+    # Sin timestamp de la FPGA el inicio es el momento de recepcion, y sigue
+    # siendo el mismo instante para los dos.
+    await service.apply_signal(SermoSignal(sermo=False))
+    await service.apply_signal(SermoSignal(sermo=True))
+    state = service.get_current_state()
+    assert state.updated_at == repository.opened[1]["started_at"]
+
+
 async def test_sermo_off_detiene_la_toma_de_datos_y_cierra_la_operacion():
     service, repository, acquisition = build_service()
     await service.apply_signal(SermoSignal(sermo=True))
