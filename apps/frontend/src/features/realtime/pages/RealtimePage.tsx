@@ -19,6 +19,7 @@ import type { RealtimeError } from "@/types/realtime";
 import { InstantValuePanel } from "../components/InstantValuePanel";
 import { OperationStrip } from "../components/OperationStrip";
 import { VariableSelector } from "../components/VariableSelector";
+import { useLatencyProbe } from "../hooks/useLatencyProbe";
 import { useReactorState } from "../hooks/useReactorState";
 import { useRealtimeSocket, type RealtimeSnapshot } from "../hooks/useRealtimeSocket";
 import { useVariableCatalog } from "../hooks/useVariableCatalog";
@@ -128,6 +129,8 @@ function RealtimeAvailable({
 }) {
   const { t } = useTranslation("common");
   const catalog = useVariableCatalog();
+  // Solo con /realtime?latencia (tarea 3.8): mide de la muestra a la pantalla.
+  useLatencyProbe(realtime.lastSampleAt);
 
   // Variables elegidas con sus datos del catalogo (unidad, rango), en orden.
   const selectedVariables = useMemo(() => {
