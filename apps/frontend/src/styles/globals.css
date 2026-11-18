@@ -366,3 +366,18 @@ input[type="range"] {
 .bg-app {
   background-color: var(--bg);
 }
+
+/* Franja de la operacion (features/realtime/components/OperationStrip.tsx):
+   celdas separadas por un fondo --line, y el punto de estado de los datos. */
+.bg-line {
+  background-color: var(--line);
+}
+.bg-good {
+  background-color: var(--good);
+}
+.text-good {
+  color: var(--good);
+}
+.bg-warn {
+  background-color: var(--warn);
+}

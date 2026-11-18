@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import i18n from "@/i18n";
-import { displayedChartMode, realtimeScreen, streamOperationId } from "./RealtimePage";
+import {
+  displayedChartMode,
+  operationStartedAt,
+  realtimeScreen,
+  streamOperationId,
+} from "./RealtimePage";
 
 describe("realtimeScreen", () => {
   it("habilita el modulo solo con el reactor operando (RF04)", () => {
@@ -33,6 +38,14 @@ describe("realtimeScreen", () => {
     // ...pero el modo elegido sigue siendo "xy": al volver a 2, vuelve solo.
   });
 
+  it("la hora de inicio es updated_at solo con el reactor operando", () => {
+    expect(operationStartedAt(null)).toBeNull();
+    expect(operationStartedAt({ sermo: false, updated_at: "2026-11-18T14:00:00Z" })).toBeNull();
+    expect(operationStartedAt({ sermo: true, updated_at: "2026-11-18T14:00:00Z" })).toBe(
+      "2026-11-18T14:00:00Z",
+    );
+  });
+
   // Claves que usa la pagina. Si se agrega una, sumarla aca.
   const KEYS = [
     "realtime.title",
@@ -59,6 +72,23 @@ describe("realtimeScreen", () => {
     "realtime.subscribeErrors.unknown_variable",
     "realtime.subscribeErrors.too_many_variables",
     "realtime.subscribeErrors.generic",
+    "realtime.operation.data",
+    "realtime.operation.id",
+    "realtime.operation.start",
+    "realtime.operation.duration",
+    "realtime.operation.lastUpdate",
+    "realtime.operation.freshness.live",
+    "realtime.operation.freshness.stale",
+    "realtime.operation.freshness.staleFor",
+    "realtime.operation.freshness.connecting",
+    "realtime.operation.freshness.waiting",
+    "realtime.operation.freshness.idle",
+    "realtime.instant.value",
+    "realtime.instant.noData",
+    "realtime.instant.min",
+    "realtime.instant.mean",
+    "realtime.instant.max",
+    "realtime.instant.window",
     "realtime.mode.label",
     "realtime.mode.time",
     "realtime.mode.xy",

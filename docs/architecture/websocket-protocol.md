@@ -111,7 +111,7 @@ Estado completo del reactor. Mismo schema que la respuesta de
 |---|---|---|
 | `sermo` | `boolean` | Ultimo valor conocido de la senal SERMO: `true` = el reactor opera |
 | `status` | `"OPERACION"` \| `"DETENIDO"` | `sermo` como se muestra. Siempre coincide con `sermo` |
-| `updated_at` | `string` (ISO 8601, UTC) | Cuando cambio `sermo` por ultima vez: el timestamp que publico la FPGA si lo trajo, o el momento en que se recibio. Antes del primer cambio, la hora de arranque del backend. Un cambio de `source_connected` no lo mueve |
+| `updated_at` | `string` (ISO 8601, UTC) | Cuando cambio `sermo` por ultima vez: el timestamp que publico la FPGA si lo trajo, o el momento en que se recibio. Antes del primer cambio, la hora de arranque del backend. Un cambio de `source_connected` no lo mueve. **Con `sermo: true` es el inicio de la operacion en curso**: el backend la abre con ese mismo instante (lo usa el frontend para la hora de inicio y la duracion; lo verifica `test_con_sermo_on_updated_at_es_el_inicio_de_la_operacion`) |
 | `operation_id` | `string` \| `null` | Operacion en curso. `null` siempre que `sermo` sea `false` |
 | `source_connected` | `boolean` | Si el backend esta recibiendo la senal. `false` = "no se sabe si el reactor opera", que **no** es "detenido": `sermo` conserva el ultimo valor conocido |
 
