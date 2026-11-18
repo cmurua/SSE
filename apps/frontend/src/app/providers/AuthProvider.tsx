@@ -3,6 +3,7 @@
 // NUESTRO backend; nunca habla directo con el modulo externo de
 // credenciales ni con el futuro SSO real (eso lo resuelve el backend).
 import { createContext, useContext, useState, type ReactNode } from "react";
+import { setSessionTokens } from "@/services/api/httpClient";
 
 interface AuthContextValue {
   user: { username: string } | null;
@@ -19,7 +20,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     throw new Error("TODO: llamar a services/api via features/auth/services/authApi.ts");
   };
 
-  const logout = () => setUser(null);
+  // Limpiar los tokens avisa a lo que depende de la sesion: el WebSocket de
+  // reactor.state se cierra solo (ver useReactorState). Falta revocar el
+  // refresh token en el backend (tarea 1.8).
+  const logout = () => {
+    setSessionTokens(null);
+    setUser(null);
+  };
 
   return <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>;
 }

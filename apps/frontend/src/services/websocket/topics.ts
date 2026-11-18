@@ -4,6 +4,15 @@ export const WS_TOPICS = {
   REACTOR_STATE: "reactor.state",
 } as const;
 
+export type WsTopic = (typeof WS_TOPICS)[keyof typeof WS_TOPICS];
+
+// Endpoint de cada topico, relativo a VITE_WS_BASE_URL (que ya incluye
+// /api/v1). Ver la tabla "Topicos" en docs/architecture/websocket-protocol.md.
+export const WS_TOPIC_PATHS: Record<WsTopic, string> = {
+  [WS_TOPICS.REALTIME_SAMPLES]: "/realtime/ws",
+  [WS_TOPICS.REACTOR_STATE]: "/reactor-state/ws",
+};
+
 // Debe reflejar app/websocket/events.py::WSEventType. Todo mensaje del
 // servidor llega como { type, data }; la forma de `data` segun el tipo esta
 // en docs/architecture/websocket-protocol.md.
