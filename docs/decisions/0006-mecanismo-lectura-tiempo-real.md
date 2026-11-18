@@ -151,8 +151,10 @@ Con `docker compose` (backend, Postgres, Mosquitto) y `scripts/mqtt/fpga.py`:
 - Tests unitarios: `tests/domains/reactor_state/test_service.py` y
   `tests/domains/reactor_data/test_acquisition.py`.
 
-Falta medir la latencia de punta a punta hasta el navegador. Eso queda para
-la tarea 3.8, cuando existan los WebSocket de la 2.5 y la 3.2.
+La latencia de punta a punta hasta el navegador se midio en la tarea 3.8:
+con 100 clientes, p99 de 0,41 s y maximo de 1,07 s de la muestra a la
+pantalla. Metodo y resultados en `docs/architecture/overview.md`,
+"Verificacion del RNF01".
 
 ## Consecuencias
 
