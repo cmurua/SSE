@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import i18n from "@/i18n";
-import { realtimeScreen } from "./RealtimePage";
+import { realtimeScreen, streamOperationId } from "./RealtimePage";
 
 describe("realtimeScreen", () => {
   it("habilita el modulo solo con el reactor operando (RF04)", () => {
@@ -16,11 +16,17 @@ describe("realtimeScreen", () => {
     expect(realtimeScreen("loading")).toBe("loading");
   });
 
+  it("conecta el stream solo con el reactor operando, y no lo corta por un corte de reactor.state", () => {
+    expect(streamOperationId(null)).toBeNull();
+    expect(streamOperationId({ sermo: false, operation_id: null })).toBeNull();
+    // `state` es el ultimo valor recibido: sigue ahi aunque la conexion de
+    // reactor.state se haya cortado, asi que el stream no se cierra.
+    expect(streamOperationId({ sermo: true, operation_id: "OP-1" })).toBe("OP-1");
+  });
+
   // Claves que usa la pagina. Si se agrega una, sumarla aca.
   const KEYS = [
     "realtime.title",
-    "realtime.available.title",
-    "realtime.available.lead",
     "realtime.unavailable.title",
     "realtime.unavailable.lead",
     "realtime.unavailable.goHistoricals",
@@ -28,6 +34,22 @@ describe("realtimeScreen", () => {
     "realtime.unknown.serverLost",
     "realtime.unknown.signalLost",
     "realtime.loading",
+    "realtime.variables.title",
+    "realtime.variables.hint",
+    "realtime.variables.selected",
+    "realtime.variables.none",
+    "realtime.variables.remove",
+    "realtime.variables.search",
+    "realtime.variables.loading",
+    "realtime.variables.loadError",
+    "realtime.variables.retry",
+    "realtime.variables.noResults",
+    "realtime.variables.setpoint",
+    "realtime.variables.limitReached",
+    "realtime.subscribeErrors.invalid_message",
+    "realtime.subscribeErrors.unknown_variable",
+    "realtime.subscribeErrors.too_many_variables",
+    "realtime.subscribeErrors.generic",
     "realtime.facts.state",
     "realtime.facts.sermo",
     "realtime.facts.acquisition",

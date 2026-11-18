@@ -274,3 +274,36 @@ a {
 input[type="range"] {
   accent-color: var(--green-800);
 }
+
+/* Variable A / B (ver components/charts/series.ts). series-a / series-b
+   fijan --series en el elemento; las demas clases la usan, asi un mismo
+   componente sirve para las dos variables. Van al final del archivo para
+   ganarle a las clases con las que se combinan (.chip, .card), que
+   declaran su propio borde con la misma especificidad. */
+.series-a {
+  --series: var(--series-a);
+}
+.series-b {
+  --series: var(--series-b);
+}
+.series-dot {
+  background-color: var(--series);
+}
+.series-border {
+  border-color: var(--series);
+}
+.series-fill {
+  background-color: var(--series);
+  border-color: var(--series);
+}
+.series-text {
+  color: var(--series);
+}
+
+/* filas y encabezados de listas (selector de variables) */
+.bg-surface-hover {
+  background-color: var(--surface-hover);
+}
+.hover-surface:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+}

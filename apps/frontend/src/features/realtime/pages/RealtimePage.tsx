@@ -8,12 +8,19 @@
 // aca, pasa a "no disponible", y vuelve sola cuando arranca. El backend
 // aplica la misma regla por su lado: realtime.samples rechaza con 4409 si el
 // reactor no opera.
-import type { ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { IActivity, IAlert } from "@/components/icons";
+import { ChartRenderer } from "@/components/charts/ChartRenderer";
+import type { ChartVariable } from "@/components/charts/types";
+import { IAlert } from "@/components/icons";
 import type { ReactorView } from "@/store/reactorStateStore";
+import type { RealtimeError } from "@/types/realtime";
+import { VariableSelector } from "../components/VariableSelector";
 import { useReactorState } from "../hooks/useReactorState";
+import { useRealtimeSocket, type RealtimeSnapshot } from "../hooks/useRealtimeSocket";
+import { useVariableCatalog } from "../hooks/useVariableCatalog";
+import { DEFAULT_SELECTION } from "../services/variableSelection";
 
 export type RealtimeScreen = "available" | "unavailable" | "unknown" | "loading";
 
@@ -34,15 +41,38 @@ export function realtimeScreen(view: ReactorView): RealtimeScreen {
   }
 }
 
+/** Operacion a la que conectar el stream de muestras. Sale del ultimo estado
+ *  recibido y no de `view`: si reactor.state se corta un instante (`view`
+ *  pasa a "disconnected"), el stream de muestras sigue vivo y no hay que
+ *  cerrarlo ni perder el buffer. Si la operacion termino, el servidor ya
+ *  corta con 4409 por su lado. */
+export function streamOperationId(state: { sermo: boolean; operation_id: string | null } | null) {
+  return state?.sermo ? state.operation_id : null;
+}
+
 export function RealtimePage() {
   const { t } = useTranslation("common");
-  const { view, connection } = useReactorState();
+  const { view, connection, state } = useReactorState();
   const screen = realtimeScreen(view);
+
+  // La seleccion y el stream viven aca y no en RealtimeAvailable, para que
+  // sobrevivan a que esa pantalla se desmonte por un corte de reactor.state.
+  const [selection, setSelection] = useState<string[]>(() => [...DEFAULT_SELECTION]);
+  const realtime = useRealtimeSocket({
+    operationId: streamOperationId(state),
+    variables: selection,
+  });
 
   return (
     <div className="space-y-5">
       <div className="banner">{t("realtime.title")}</div>
-      {screen === "available" && <RealtimeAvailable />}
+      {screen === "available" && (
+        <RealtimeAvailable
+          selection={selection}
+          onSelectionChange={setSelection}
+          realtime={realtime}
+        />
+      )}
       {screen === "unavailable" && <RealtimeUnavailable />}
       {/* Con el WebSocket abierto, lo que falta es la senal del reactor
           (source_connected: false); si no, es el servidor. */}
@@ -52,19 +82,64 @@ export function RealtimePage() {
   );
 }
 
-// TODO(Milestone 3): esta tarjeta es un marcador. La reemplazan el selector
-// de variables (3.4), el grafico (3.5, 3.6) y el panel de valor instantaneo
-// y metadatos de la operacion (3.7), alimentados por useRealtimeSocket (3.3).
-function RealtimeAvailable() {
-  const { t } = useTranslation("common");
+// TODO(Milestone 3): el grafico (3.5, 3.6) y el panel de valor instantaneo
+// y metadatos de la operacion (3.7) se completan en sus tareas.
+function RealtimeAvailable({
+  selection,
+  onSelectionChange,
+  realtime,
+}: {
+  selection: string[];
+  onSelectionChange: (selection: string[]) => void;
+  realtime: RealtimeSnapshot;
+}) {
+  const catalog = useVariableCatalog();
+
+  const chartVariables = useMemo(() => {
+    const byId = new Map((catalog.data ?? []).map((v) => [v.id, v]));
+    return selection
+      .map((id) => byId.get(id))
+      .filter((v) => v !== undefined)
+      .map(({ id, name, unit }): ChartVariable => ({ id, name, unit }));
+  }, [catalog.data, selection]);
+
   return (
-    <StatusCard
-      icon={<IActivity size={28} />}
-      iconClassName="bg-green-header text-white"
-      eyebrow={`${t("sermo.label")} · ${t("sermo.on")}`}
-      title={t("realtime.available.title")}
-      lead={t("realtime.available.lead")}
-    />
+    <div className="grid grid-cols-12 gap-5">
+      <aside className="col-span-12 lg:col-span-4 xl:col-span-3 self-start">
+        <VariableSelector
+          catalog={catalog.data}
+          loading={catalog.isPending}
+          failed={catalog.isError}
+          onRetry={() => void catalog.refetch()}
+          selection={selection}
+          onChange={onSelectionChange}
+        />
+      </aside>
+      <section className="col-span-12 lg:col-span-8 xl:col-span-9 space-y-4">
+        {realtime.error && <SubscribeError error={realtime.error} />}
+        <ChartRenderer
+          variables={chartVariables}
+          data={realtime.series}
+          mode="time"
+          height={360}
+        />
+      </section>
+    </div>
+  );
+}
+
+const SUBSCRIBE_ERROR_CODES = ["invalid_message", "unknown_variable", "too_many_variables"];
+
+/** Un `subscribe` rechazado. El servidor conserva la seleccion anterior, asi
+ *  que lo que se ve puede no coincidir con lo elegido: hay que decirlo. */
+function SubscribeError({ error }: { error: RealtimeError }) {
+  const { t } = useTranslation("common");
+  const code = SUBSCRIBE_ERROR_CODES.includes(error.code) ? error.code : "generic";
+  return (
+    <div role="alert" className="card card-pad flex items-start gap-3 text-[13px]">
+      <IAlert size={18} className="text-warn shrink-0 mt-0.5" />
+      <span>{t(`realtime.subscribeErrors.${code}`)}</span>
+    </div>
   );
 }
 

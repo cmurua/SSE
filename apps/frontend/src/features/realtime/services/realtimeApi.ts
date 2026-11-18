@@ -1,13 +1,15 @@
 import { ENDPOINTS } from "@/services/api/endpoints";
 import { httpClient, type RequestOptions } from "@/services/api/httpClient";
 import { WS_CLIENT_MESSAGE_TYPES } from "@/services/websocket/topics";
-import type { ReactorState } from "@/types/reactor";
+import type { ReactorState, ReactorVariable } from "@/types/reactor";
 import type { RealtimeError, RealtimeSample, RealtimeSubscription } from "@/types/realtime";
 
 export const realtimeApi = {
   getStatus: () => httpClient.get("/realtime/status"),
   getReactorState: (options?: RequestOptions) =>
     httpClient.get<ReactorState>(ENDPOINTS.reactorState, options),
+  getVariables: (options?: RequestOptions) =>
+    httpClient.get<ReactorVariable[]>(ENDPOINTS.reactorVariables, options),
 };
 
 // --- realtime.samples -----------------------------------------------------

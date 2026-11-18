@@ -9,6 +9,7 @@ export const ENDPOINTS = {
     logout: "/auth/logout",
   },
   reactorState: "/reactor-state",
+  reactorVariables: "/reactor-data/variables",
   realtimeStatus: "/realtime/status",
   historicals: {
     operations: "/historicals/operations",

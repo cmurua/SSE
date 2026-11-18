@@ -46,6 +46,13 @@
   --sermo-lost-halo: rgba(242, 184, 75, 0.3);
   --sermo-lost-text: #f6cf85;
 
+  /* Variable A y Variable B (RF05), iguales en el selector y en el grafico
+     (ver components/charts/series.ts). Salen de ChartPlaceholder.jsx; son
+     los mismos valores que --accent y --warn, pero con otro significado:
+     cambiar uno no tiene que cambiar el otro. */
+  --series-a: #2f6fb5;
+  --series-b: #b27a13;
+
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
