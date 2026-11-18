@@ -18,6 +18,11 @@
   --good: #2e7d4f;
   --bad: #b3261e;
   --warn: #b27a13;
+  /* Fondos suaves para iconos de estado sobre tarjetas blancas. --bad-soft
+     sale del estado "no disponible" de Realtime.jsx; --warn-soft acompana al
+     estado "sin conexion", que el prototipo no tenia. */
+  --bad-soft: #f3e6e5;
+  --warn-soft: #f6eedd;
 
   /* Neutros que en el prototipo estaban inline dentro del <style>; se
      extraen aca para cumplir "sin colores hardcodeados" fuera de tokens. */
