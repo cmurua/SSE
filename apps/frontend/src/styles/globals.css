@@ -78,6 +78,33 @@ body {
 .pulse-dot {
   animation: pulseDot 1.6s ease-in-out infinite;
 }
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot {
+    animation: none;
+  }
+}
+
+/* indicador SERMO (ver app/SermoIndicator.tsx). Clases propias y no
+   bg-[...]/35 de Tailwind: el modificador de opacidad no funciona con
+   variables CSS, por eso los halos traen su propia transparencia. */
+.bg-sermo-on {
+  background-color: var(--sermo-on);
+}
+.bg-sermo-on-halo {
+  background-color: var(--sermo-on-halo);
+}
+.text-sermo-on {
+  color: var(--sermo-on-text);
+}
+.bg-sermo-lost {
+  background-color: var(--sermo-lost);
+}
+.bg-sermo-lost-halo {
+  background-color: var(--sermo-lost-halo);
+}
+.text-sermo-lost {
+  color: var(--sermo-lost-text);
+}
 
 /* subtle scrollbars */
 *::-webkit-scrollbar {
