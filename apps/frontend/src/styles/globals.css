@@ -84,6 +84,20 @@ body {
   }
 }
 
+/* iconos de estado sobre tarjeta (ver features/realtime/pages/RealtimePage.tsx) */
+.bg-bad-soft {
+  background-color: var(--bad-soft);
+}
+.text-bad {
+  color: var(--bad);
+}
+.bg-warn-soft {
+  background-color: var(--warn-soft);
+}
+.text-warn {
+  color: var(--warn);
+}
+
 /* indicador SERMO (ver app/SermoIndicator.tsx). Clases propias y no
    bg-[...]/35 de Tailwind: el modificador de opacidad no funciona con
    variables CSS, por eso los halos traen su propia transparencia. */
