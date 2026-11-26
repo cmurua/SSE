@@ -124,8 +124,16 @@ local, donde no aplica el healthcheck de Compose.
 ## Tests
 
 ```
-pytest
+docker compose exec backend pytest
 ```
+
+Los tests que necesitan base (fixture `db_session`, ver `tests/conftest.py`)
+usan Postgres real en una base aparte: la de `DATABASE_URL` con el sufijo
+`_test` (`sse_ra0_test`), que se crea sola la primera vez. Su esquema se borra
+y se recrea en cada corrida, y cada test corre en una transaccion que se
+deshace al terminar, asi que nunca tocan la base de desarrollo. Para apuntar a
+otro servidor, definir `TEST_DATABASE_URL` (tiene que terminar en `_test`).
+El resto de la suite corre sin base.
 
 Ver la organizacion por dominios en `app/domains/`. Cada dominio agrupa
 router, service, schemas, models y repository — no hay carpetas
