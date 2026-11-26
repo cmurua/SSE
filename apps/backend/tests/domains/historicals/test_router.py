@@ -3,10 +3,11 @@
 # Se prueba por HTTP y no llamando al servicio porque los filtros solo tienen
 # sentido de punta a punta: el parseo de los parametros, la traduccion de
 # fechas a la hora de Cordoba y el SQL que las aplica. Cada test corre dentro
-# de una transaccion que se deshace al terminar (ver tests/conftest.py).
+# de una transaccion que se deshace al terminar (ver tests/conftest.py). El
+# cliente HTTP es el fixture `client` de conftest.py.
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -15,22 +16,12 @@ from sqlalchemy import event, insert
 from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token
-from app.db.session import get_db
 from app.domains.historicals.models import Operation
 from app.domains.historicals.service import LOCAL_TIMEZONE
 from app.domains.reactor_data.models import ReactorSample
-from app.main import app
+from app.domains.reactor_data.variable_catalog import sample_column
 
 URL = "/api/v1/historicals/operations"
-
-
-@pytest.fixture
-def client(db_session: Session) -> Iterator[TestClient]:
-    # Sin `with`: no se dispara el lifespan (broker, toma de datos). La base
-    # se inyecta reemplazando get_db por la sesion transaccional del test.
-    app.dependency_overrides[get_db] = lambda: db_session
-    yield TestClient(app)
-    app.dependency_overrides.pop(get_db, None)
 
 
 def auth(username: str = "jperez") -> dict[str, str]:
@@ -51,8 +42,14 @@ def add_operation(
     minutes: int | None = 60,
     samples: int = 0,
     notes: str | None = None,
+    values: Callable[[int], dict[str, float | None]] | None = None,
 ) -> Operation:
-    """Crea una operacion; `minutes=None` la deja abierta."""
+    """Crea una operacion; `minutes=None` la deja abierta.
+
+    Las `samples` muestras van a 1 Hz desde `started_at`. `values(i)` da los
+    valores de la muestra `i` por ID del catalogo; sin `values`, las
+    muestras solo llevan el timestamp.
+    """
     operation = Operation(
         id=operation_id,
         name=name,
@@ -67,7 +64,14 @@ def add_operation(
         session.execute(
             insert(ReactorSample),
             [
-                {"operation_id": operation_id, "timestamp": started_at + timedelta(seconds=i)}
+                {
+                    "operation_id": operation_id,
+                    "timestamp": started_at + timedelta(seconds=i),
+                    **{
+                        sample_column(variable): value
+                        for variable, value in (values(i) if values else {}).items()
+                    },
+                }
                 for i in range(samples)
             ],
         )

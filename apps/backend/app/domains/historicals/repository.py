@@ -10,11 +10,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import ColumnElement, and_, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import ColumnElement, Integer, and_, cast, func, literal, or_, select
+from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.domains.historicals.models import Operation
 from app.domains.reactor_data.models import ReactorSample
+from app.domains.reactor_data.variable_catalog import sample_column
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,36 @@ class OperationRepository:
 
         return operations, total
 
+    def get_closed(self, operation_id: str) -> Operation | None:
+        """La operacion, si existe y ya cerro. La abierta se trata como
+        inexistente: sus muestras todavia cambian y se ven en Tiempo Real."""
+        return self._db.scalar(
+            select(Operation).where(
+                Operation.id == operation_id, Operation.ended_at.is_not(None)
+            )
+        )
+
+
+@dataclass(frozen=True)
+class SampleStats:
+    count: int
+    first_at: datetime | None
+    last_at: datetime | None
+
+
+def _value_columns(variable_ids: Sequence[str]) -> list[InstrumentedAttribute]:
+    return [getattr(ReactorSample, sample_column(v)) for v in variable_ids]
+
+
+def _in_window(operation_id: str, start: datetime, end: datetime) -> ColumnElement[bool]:
+    # Ventana [start, end): con el indice (operation_id, timestamp) es un
+    # recorrido de un rango contiguo del indice.
+    return and_(
+        ReactorSample.operation_id == operation_id,
+        ReactorSample.timestamp >= start,
+        ReactorSample.timestamp < end,
+    )
+
 
 class SampleRepository:
     def __init__(self, db: Session) -> None:
@@ -110,3 +141,72 @@ class SampleRepository:
             .group_by(ReactorSample.operation_id)
         ).all()
         return dict(rows)
+
+    def stats(self, operation_id: str) -> SampleStats:
+        """Cantidad de muestras y primer y ultimo instante, en una consulta."""
+        count, first_at, last_at = self._db.execute(
+            select(
+                func.count(), func.min(ReactorSample.timestamp), func.max(ReactorSample.timestamp)
+            ).where(ReactorSample.operation_id == operation_id)
+        ).one()
+        return SampleStats(count=count, first_at=first_at, last_at=last_at)
+
+    def count_in_window(self, operation_id: str, start: datetime, end: datetime) -> int:
+        return (
+            self._db.scalar(
+                select(func.count())
+                .select_from(ReactorSample)
+                .where(_in_window(operation_id, start, end))
+            )
+            or 0
+        )
+
+    def raw_window(
+        self, operation_id: str, variable_ids: Sequence[str], start: datetime, end: datetime
+    ) -> list[tuple]:
+        """Filas `(timestamp, valor_1, ..., valor_n)` de la ventana, en orden."""
+        rows = self._db.execute(
+            select(ReactorSample.timestamp, *_value_columns(variable_ids))
+            .where(_in_window(operation_id, start, end))
+            .order_by(ReactorSample.timestamp)
+        ).all()
+        return [tuple(row) for row in rows]
+
+    def averaged_window(
+        self,
+        operation_id: str,
+        variable_ids: Sequence[str],
+        start: datetime,
+        end: datetime,
+        *,
+        bucket_seconds: float,
+        buckets: int,
+    ) -> list[tuple]:
+        """Filas `(intervalo, promedio_1, ..., promedio_n)`, en orden.
+
+        El intervalo `k` agrupa las muestras de
+        [start + k * bucket_seconds, start + (k + 1) * bucket_seconds). El
+        promedio se calcula en Postgres: viajan como mucho `buckets` filas y
+        no todas las de la ventana. AVG ignora los NULL, asi que un canal que
+        no publico nada en todo el intervalo sigue siendo NULL y no un 0.
+        """
+        offset = func.extract("epoch", ReactorSample.timestamp - literal(start))
+        # LEAST por redondeo: una muestra a un pelo de `end` no puede caer en
+        # un intervalo mas alla del ultimo.
+        bucket = func.least(cast(func.floor(offset / bucket_seconds), Integer), buckets - 1)
+
+        # Subconsulta para agrupar por la columna y no por la expresion: si se
+        # repite la expresion, cada aparicion lleva sus propios parametros y
+        # Postgres no la reconoce como la misma del GROUP BY.
+        windowed = (
+            select(bucket.label("bucket"), *_value_columns(variable_ids))
+            .where(_in_window(operation_id, start, end))
+            .subquery()
+        )
+        value_columns = [windowed.c[sample_column(v)] for v in variable_ids]
+        rows = self._db.execute(
+            select(windowed.c.bucket, *(func.avg(column) for column in value_columns))
+            .group_by(windowed.c.bucket)
+            .order_by(windowed.c.bucket)
+        ).all()
+        return [tuple(row) for row in rows]
