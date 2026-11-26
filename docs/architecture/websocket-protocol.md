@@ -218,6 +218,11 @@ llegar una muestra con la seleccion nueva un instante antes que su
 
 Schemas en `app/domains/realtime/schemas.py`.
 
+`GET /historicals/operations/{id}/samples` devuelve sus muestras con esta misma
+forma (`RealtimeSample`), para que el frontend use el mismo buffer y los mismos
+tipos en Tiempo Real y en Historicos. Si cambia este evento, cambia tambien esa
+respuesta.
+
 ### `error`
 
 Un mensaje del cliente que no se pudo atender. La conexion sigue abierta.

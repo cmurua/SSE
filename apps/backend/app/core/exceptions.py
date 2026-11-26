@@ -20,6 +20,10 @@ class ReactorNotOperatingError(DomainError):
     pass
 
 
+class OperationNotFoundError(DomainError):
+    """La operacion no existe o sigue abierta: para historicos es lo mismo."""
+
+
 # --- Tokens -----------------------------------------------------------------
 # Jerarquia propia para no filtrar las excepciones de PyJWT al resto del
 # backend: quien valida un token no deberia tener que importar `jwt` ni saber

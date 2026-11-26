@@ -9,10 +9,22 @@ from pydantic import (
     model_validator,
 )
 
+from app.domains.reactor_data.variable_catalog import REACTOR_VARIABLES_BY_ID
+from app.domains.realtime.schemas import RealtimeSample
+
 # Tope de `page_size`: con 100 filas la respuesta sigue siendo chica y la
 # consulta agrupada de muestras se mantiene acotada (ver repository.py).
 MAX_PAGE_SIZE = 100
 DEFAULT_PAGE_SIZE = 20
+
+# Variables por pedido de series: las 2 del grafico mas las del panel del
+# nucleo (POSBC1 a POSBC4 hoy), con margen.
+MAX_SAMPLE_VARIABLES = 8
+# Puntos por serie. 2000 alcanzan para el ancho de un grafico en pantalla; el
+# tope evita pedir la tabla entera de una operacion larga sin reducir.
+DEFAULT_MAX_POINTS = 2000
+MIN_MAX_POINTS = 2
+MAX_MAX_POINTS = 10_000
 
 
 class OperationSummary(BaseModel):
@@ -96,3 +108,101 @@ class OperationSearchParams(BaseModel):
         if self.date_from and self.date_to and self.date_from > self.date_to:
             raise ValueError("`from` no puede ser posterior a `to`")
         return self
+
+
+class OperationDetail(OperationListItem):
+    """Detalle de una operacion cerrada (RF06).
+
+    `first_sample_at` y `last_sample_at` son None si la operacion no tiene
+    muestras.
+    """
+
+    first_sample_at: datetime | None
+    last_sample_at: datetime | None
+
+
+def parse_variable_ids(raw: str) -> tuple[str, ...]:
+    """`"A, B,A"` -> `("A", "B")`: sin duplicados y en el orden pedido."""
+    return tuple(dict.fromkeys(part.strip() for part in raw.split(",")))
+
+
+class OperationSamplesParams(BaseModel):
+    """Parametros de GET /historicals/operations/{operation_id}/samples.
+
+    `start` y `end` son segundos desde el inicio de la operacion y definen la
+    ventana [start, end). Sin `start`, la ventana arranca al inicio; sin
+    `end`, termina con la operacion. Un `end` posterior al cierre se recorta.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Un solo parametro separado por comas (`variables=LOGA1,POTM4`) y no el
+    # parametro repetido: la URL queda corta y el orden es explicito.
+    variables: str = Field(
+        description=(
+            "IDs del catalogo separados por comas (GET /reactor-data/variables), "
+            f"hasta {MAX_SAMPLE_VARIABLES}."
+        ),
+    )
+    # Sin `inf` ni `nan`: no son un instante de la operacion.
+    start: float | None = Field(
+        default=None,
+        ge=0,
+        allow_inf_nan=False,
+        description="Inicio de la ventana, en segundos desde el inicio de la operacion.",
+    )
+    end: float | None = Field(
+        default=None,
+        gt=0,
+        allow_inf_nan=False,
+        description="Fin de la ventana (exclusivo), en segundos desde el inicio de la operacion.",
+    )
+    max_points: int = Field(
+        default=DEFAULT_MAX_POINTS,
+        ge=MIN_MAX_POINTS,
+        le=MAX_MAX_POINTS,
+        description="Si la ventana tiene mas muestras, se promedian por intervalos.",
+    )
+
+    @field_validator("variables")
+    @classmethod
+    def _known_variables(cls, value: str) -> str:
+        variable_ids = parse_variable_ids(value)
+        if "" in variable_ids:
+            raise ValueError("`variables` no puede tener elementos vacios")
+        unknown = [v for v in variable_ids if v not in REACTOR_VARIABLES_BY_ID]
+        if unknown:
+            raise ValueError(f"Variables inexistentes: {', '.join(unknown)}")
+        if len(variable_ids) > MAX_SAMPLE_VARIABLES:
+            raise ValueError(f"Se pueden pedir hasta {MAX_SAMPLE_VARIABLES} variables a la vez")
+        return value
+
+    @model_validator(mode="after")
+    def _start_before_end(self) -> "OperationSamplesParams":
+        if self.start is not None and self.end is not None and self.start >= self.end:
+            raise ValueError("`start` tiene que ser anterior a `end`")
+        return self
+
+    @property
+    def variable_ids(self) -> tuple[str, ...]:
+        return parse_variable_ids(self.variables)
+
+
+class OperationSamples(BaseModel):
+    """Series de una operacion cerrada en una ventana de tiempo.
+
+    Cada muestra tiene la misma forma que el evento `sample` de
+    realtime.samples, asi el frontend reusa el buffer y los tipos de Tiempo
+    Real. Con `downsampled`, cada muestra es el promedio de un intervalo de
+    `bucket_seconds` y su `timestamp` es el inicio del intervalo; un intervalo
+    sin muestras no aparece.
+    """
+
+    operation_id: str
+    variables: list[str]
+    # Ventana aplicada, ya recortada a la duracion de la operacion.
+    start: float
+    end: float
+    downsampled: bool
+    bucket_seconds: float | None
+    samples: list[RealtimeSample]
