@@ -19,3 +19,12 @@ libreria en el futuro implica: crear su adapter + cambiar una linea en
 El placeholder actual no tiene todas las capacidades de una libreria real
 (zoom, tooltips avanzados); se acepta esa limitacion a cambio de no
 bloquear el desarrollo del resto del sistema.
+
+El contrato tiene dos partes: las props (`ChartRendererProps`, que
+dibujar) y un handle que se obtiene con `ref` (`ChartHandle`, que se le
+puede pedir al grafico ya dibujado). Hoy el handle tiene `toImage()`, que
+devuelve el PNG del grafico visible (tarea 5.8). Un adapter nuevo tiene que
+implementar los dos; `activeAdapter.ts` esta tipado como `ChartAdapter`, asi
+que uno incompleto no compila. Para un adapter que dibuje en SVG alcanza con
+`svgChartToPng` (`components/charts/svgImage.ts`); uno que dibuje en canvas
+puede usar `canvas.toBlob` directamente.

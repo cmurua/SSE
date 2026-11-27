@@ -8,22 +8,36 @@
 // aca, pasa a "no disponible", y vuelve sola cuando arranca. El backend
 // aplica la misma regla por su lado: realtime.samples rechaza con 4409 si el
 // reactor no opera.
-import { useMemo, useState, type ReactNode } from "react";
+//
+// Exportar PNG (tarea 5.8): la imagen del grafico en vivo tal como se ve, con
+// la ventana medida desde el inicio de la operacion.
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { ChartRenderer } from "@/components/charts/ChartRenderer";
-import type { ChartMode, ChartVariable } from "@/components/charts/types";
+import type { ChartHandle, ChartMode, ChartVariable } from "@/components/charts/types";
 import { IAlert } from "@/components/icons";
 import { useVariableCatalog } from "@/hooks/useVariableCatalog";
 import type { ReactorView } from "@/store/reactorStateStore";
 import type { RealtimeError } from "@/types/realtime";
 import { ChartModeToggle } from "@/features/operation-viewer/components/ChartModeToggle";
 import { ControlBarsPanel } from "@/features/operation-viewer/components/ControlBarsPanel";
+import { ExportButtons } from "@/features/operation-viewer/components/ExportButtons";
 import { InstantValuePanel } from "@/features/operation-viewer/components/InstantValuePanel";
 import { VariableSelector } from "@/features/operation-viewer/components/VariableSelector";
 import { displayedChartMode } from "@/features/operation-viewer/services/chartMode";
 import { latestSnapshot, panelVariableIds } from "@/features/operation-viewer/services/controlBars";
-import { latestValue, type InstantValue } from "@/features/operation-viewer/services/instantValues";
+import {
+  exportFileName,
+  type ExportWindow,
+} from "@/features/operation-viewer/services/exportFileName";
+import { exportChartImage, hasPoints } from "@/features/operation-viewer/services/exportImage";
+import {
+  formatTime,
+  latestValue,
+  type InstantValue,
+} from "@/features/operation-viewer/services/instantValues";
+import { parseTimestamp } from "@/features/operation-viewer/services/samples";
 import { DEFAULT_SELECTION } from "@/features/operation-viewer/services/variableSelection";
 import { LiveOperationStrip } from "../components/LiveOperationStrip";
 import { useLatencyProbe } from "../hooks/useLatencyProbe";
@@ -65,6 +79,22 @@ export function streamOperationId(state: { sermo: boolean; operation_id: string 
  *  operacion. */
 export function operationStartedAt(state: { sermo: boolean; updated_at: string } | null) {
   return state?.sermo ? state.updated_at : null;
+}
+
+/** Ventana que muestra el grafico en vivo, en segundos desde el inicio de la
+ *  operacion: los ultimos `windowMs` hasta la ultima muestra, sin empezar
+ *  antes de la operacion. null si falta el inicio o todavia no hay muestras
+ *  (el nombre del PNG va sin ventana). */
+export function liveExportWindow(
+  startedAt: string | null,
+  lastSampleAt: number | null,
+  windowMs: number,
+): ExportWindow | null {
+  if (startedAt === null || lastSampleAt === null) return null;
+  const started = parseTimestamp(startedAt);
+  if (!Number.isFinite(started)) return null;
+  const end = Math.max(0, (lastSampleAt - started) / 1000);
+  return { start: Math.max(0, end - windowMs / 1000), end };
 }
 
 export function RealtimePage() {
@@ -156,6 +186,37 @@ function RealtimeAvailable({
     [catalog.data, realtime.series, realtime.lastSampleAt],
   );
 
+  const chartRef = useRef<ChartHandle>(null);
+  const chartVariableIds = chartVariables.map(({ id }) => id);
+  const exportPng = () => {
+    // Se fija al hacer click: el grafico sigue avanzando mientras se genera.
+    const liveWindow = liveExportWindow(startedAt, realtime.lastSampleAt, REALTIME_WINDOW_MS);
+    return exportChartImage({
+      chart: chartRef.current,
+      image: {
+        title: t("viewer.export.image.titleLive", { id: operationId ?? "—" }),
+        subtitle: t("viewer.export.image.liveWindow", {
+          variables: chartVariableIds.join(", "),
+          minutes: REALTIME_WINDOW_MS / 60_000,
+          until: realtime.lastSampleAt === null ? "—" : formatTime(realtime.lastSampleAt),
+        }),
+      },
+      fileName: exportFileName({
+        operationId,
+        variableIds: chartVariableIds,
+        window: liveWindow,
+        extension: "png",
+      }),
+      log: {
+        source: "realtime",
+        operation_id: operationId,
+        variables: chartVariableIds,
+        start: liveWindow?.start ?? null,
+        end: liveWindow?.end ?? null,
+      },
+    });
+  };
+
   return (
     <div className="grid grid-cols-12 gap-5">
       <aside className="col-span-12 lg:col-span-4 xl:col-span-3 self-start">
@@ -180,12 +241,21 @@ function RealtimeAvailable({
         />
         {realtime.error && <SubscribeError error={realtime.error} />}
         <ControlBarsPanel catalog={catalog.data} snapshot={controlBarsSnapshot} />
-        <ChartModeToggle
-          mode={mode}
-          xyAvailable={chartVariables.length >= 2}
-          onChange={onModeChange}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <ChartModeToggle
+            mode={mode}
+            xyAvailable={chartVariables.length >= 2}
+            onChange={onModeChange}
+          />
+          <div className="ml-auto">
+            <ExportButtons
+              onExportPng={exportPng}
+              pngAvailable={hasPoints(chartVariableIds, realtime.series)}
+            />
+          </div>
+        </div>
         <ChartRenderer
+          ref={chartRef}
           variables={chartVariables}
           data={realtime.series}
           mode={mode}
@@ -229,9 +299,8 @@ function RealtimeUnavailable() {
       title={t("realtime.unavailable.title")}
       lead={t("realtime.unavailable.lead")}
     >
-      {/* RF04 deja solo los historicos al terminar la operacion. RF06 esta
-          fuera del MVP: /historicals es hoy una pagina placeholder. Deuda
-          registrada en la tarea 2.8. */}
+      {/* RF04 deja solo los historicos al terminar la operacion: la que
+          acaba de cerrar ya aparece en el listado (Milestone 5). */}
       <Link to="/historicals" className="btn-dark mt-6">
         {t("realtime.unavailable.goHistoricals")}
       </Link>

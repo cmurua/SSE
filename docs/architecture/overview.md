@@ -142,9 +142,13 @@ primero.
 - Libreria de fetching/estado de servidor: **TanStack Query** para REST.
 - Libreria de graficos: NO definida (a proposito). Ver
   `docs/decisions/0002-chart-library-deferred.md`.
-- Exportacion a PNG (RF06/area 5): se asume renderizado client-side
-  (canvas/SVG -> PNG) y el backend solo audita el evento
-  (`domains/exports`). Revisar si se requiere export server-side.
+- Exportacion (tarea 5.8): el PNG se genera en el navegador
+  (`ChartHandle.toImage()`: SVG -> canvas -> PNG, ver
+  `apps/frontend/src/components/charts/README.md`) y el backend solo deja
+  constancia con `POST /exports/log`. El CSV de un historico lo genera el
+  backend en streaming (`GET /historicals/operations/{id}/samples.csv`,
+  separado por `;` y con coma decimal, para planillas en espanol) y lo
+  registra el mismo endpoint. Ambos quedan en `audit_logs` (RNF03).
 - Login: existen DOS integraciones externas distintas, no confundir:
   1. HOY (confirmado): un modulo externo e independiente valida
      usuario/contrasena via su propia API (`domains/auth/adapters/external_api_provider.py`).

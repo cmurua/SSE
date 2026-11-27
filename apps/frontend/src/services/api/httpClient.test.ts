@@ -198,3 +198,44 @@ describe("httpClient", () => {
     expect(getAccessToken()).toBe("token-vencido");
   });
 });
+
+describe("httpClient.getBlob (descarga de archivos)", () => {
+  function csvResponse(text: string): Response {
+    return new Response(text, { status: 200, headers: { "content-type": "text/csv; charset=utf-8" } });
+  }
+
+  it("devuelve el archivo como Blob, con el token y los parametros", async () => {
+    fetchMock.mockResolvedValueOnce(csvResponse("timestamp;POTM4 [W]\r\n"));
+
+    const blob = await httpClient.getBlob("/historicals/operations/OP-1/samples.csv", {
+      params: { variables: "POTM4", start: 0 },
+    });
+
+    expect(await blob.text()).toBe("timestamp;POTM4 [W]\r\n");
+    expect(blob.type).toMatch(/^text\/csv/);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${API_BASE_URL}/historicals/operations/OP-1/samples.csv?variables=POTM4&start=0`,
+    );
+    expect(authHeaderOf(0)).toBe("Bearer token-vencido");
+  });
+
+  it("ante un 401 renueva el token y reintenta, igual que get", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ detail: "token expirado" }, 401))
+      .mockResolvedValueOnce(jsonResponse({ access_token: "token-nuevo" }))
+      .mockResolvedValueOnce(csvResponse("ok"));
+
+    const blob = await httpClient.getBlob("/historicals/operations/OP-1/samples.csv");
+
+    expect(await blob.text()).toBe("ok");
+    expect(authHeaderOf(2)).toBe("Bearer token-nuevo");
+  });
+
+  it("un error trae el status y el cuerpo parseado", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: "Operacion no encontrada" }, 404));
+
+    await expect(
+      httpClient.getBlob("/historicals/operations/OP-9/samples.csv"),
+    ).rejects.toMatchObject({ status: 404, body: { detail: "Operacion no encontrada" } });
+  });
+});

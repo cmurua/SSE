@@ -3,5 +3,8 @@
 // real (Recharts, ECharts, visx, ...), crear su carpeta en adapters/ y
 // cambiar esta unica linea.
 import { PlaceholderChartAdapter } from "./adapters/placeholder/PlaceholderChartAdapter";
+import type { ChartAdapter } from "./types";
 
-export const activeChartAdapter = PlaceholderChartAdapter;
+// Tipado como ChartAdapter: un adapter que no cumpla el contrato (props y
+// handle con toImage) no compila.
+export const activeChartAdapter: ChartAdapter = PlaceholderChartAdapter;

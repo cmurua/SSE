@@ -4,9 +4,11 @@
 // - `className` fija --series en un elemento HTML; las clases series-dot,
 //   series-border, series-fill y series-text (globals.css) la usan.
 // - `color` sirve directo como fill/stroke en SVG.
+// - `token` es la variable CSS, para resolver el color con getComputedStyle
+//   donde no hay hoja de estilos (la imagen exportada).
 export const CHART_SERIES = [
-  { label: "A", className: "series-a", color: "var(--series-a)" },
-  { label: "B", className: "series-b", color: "var(--series-b)" },
+  { label: "A", className: "series-a", color: "var(--series-a)", token: "--series-a" },
+  { label: "B", className: "series-b", color: "var(--series-b)", token: "--series-b" },
 ] as const;
 
 export type ChartSeries = (typeof CHART_SERIES)[number];

@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from app.core.exceptions import OperationNotFoundError
+from app.domains.exports.file_names import export_file_name
+from app.domains.historicals.csv_export import csv_chunks
+from app.domains.historicals.csv_export import header as csv_header
 from app.domains.historicals.models import Operation
 from app.domains.historicals.repository import (
     OperationFilters,
@@ -15,15 +20,21 @@ from app.domains.historicals.schemas import (
     OperationListItem,
     OperationPage,
     OperationSamples,
+    OperationSamplesCsvParams,
     OperationSamplesParams,
     OperationSearchParams,
+    SampleWindowParams,
 )
+from app.domains.reactor_data.variable_catalog import REACTOR_VARIABLES
 from app.domains.realtime.schemas import RealtimeSample
 
 # Las fechas que elige el usuario son dias del calendario del reactor, no de
 # UTC: una operacion que empieza el 9 a las 22:00 en Cordoba (01:00 UTC del
 # 10) tiene que aparecer al filtrar por el 9.
 LOCAL_TIMEZONE = ZoneInfo("America/Argentina/Cordoba")
+
+# El CSV sin `variables` lleva el catalogo entero, en el orden del catalogo.
+ALL_VARIABLE_IDS = tuple(variable["id"] for variable in REACTOR_VARIABLES)
 
 
 def local_day_bounds(
@@ -122,16 +133,7 @@ class HistoricalsService:
         """
         operation = self._get_closed(operation_id)
         variable_ids = params.variable_ids
-
-        # La ventana se recorta a la duracion de la operacion, asi el tamano
-        # de los intervalos sale de la ventana real y no de un `end` enorme.
-        # `start` <= `end` sigue valiendo: si ambos pasan el cierre, quedan
-        # iguales y la ventana esta vacia.
-        duration = (operation.ended_at - operation.started_at).total_seconds()
-        start = min(params.start or 0.0, duration)
-        end = min(params.end if params.end is not None else duration, duration)
-        window_start = operation.started_at + timedelta(seconds=start)
-        window_end = operation.started_at + timedelta(seconds=end)
+        start, end, window_start, window_end = _clip_window(operation, params)
 
         def result(samples: list[RealtimeSample], bucket_seconds: float | None) -> OperationSamples:
             return OperationSamples(
@@ -182,11 +184,78 @@ class HistoricalsService:
             bucket_seconds,
         )
 
+    def export_samples_csv(
+        self, operation_id: str, params: OperationSamplesCsvParams
+    ) -> SamplesCsv:
+        """CSV de una operacion cerrada en la ventana pedida, sin reducir.
+
+        La operacion se busca aca, antes de devolver: un 404 tiene que salir
+        antes de empezar a mandar el archivo. Las filas se leen recien al
+        recorrer `chunks`, de a tandas (ver SampleRepository.stream_window).
+        """
+        operation = self._get_closed(operation_id)
+        requested = params.variable_ids
+        variable_ids = requested if requested is not None else ALL_VARIABLE_IDS
+        start, end, window_start, window_end = _clip_window(operation, params)
+
+        rows = (
+            self._sample_repository.stream_window(
+                operation_id, variable_ids, window_start, window_end
+            )
+            if start < end
+            else iter(())
+        )
+        return SamplesCsv(
+            file_name=export_file_name(
+                operation_id,
+                variable_ids,
+                (start, end),
+                "csv",
+                all_variables=requested is None,
+            ),
+            variable_ids=variable_ids,
+            start=start,
+            end=end,
+            chunks=csv_chunks(csv_header(variable_ids), rows),
+        )
+
     def _get_closed(self, operation_id: str) -> Operation:
         operation = self._operation_repository.get_closed(operation_id)
         if operation is None:
             raise OperationNotFoundError(operation_id)
         return operation
+
+
+@dataclass(frozen=True)
+class SamplesCsv:
+    file_name: str
+    variable_ids: tuple[str, ...]
+    # Ventana aplicada, en segundos desde el inicio y ya recortada.
+    start: float
+    end: float
+    chunks: Iterator[str]
+
+
+def _clip_window(
+    operation: Operation, params: SampleWindowParams
+) -> tuple[float, float, datetime, datetime]:
+    """La ventana pedida, recortada a la duracion de la operacion.
+
+    Devuelve `(start, end)` en segundos desde el inicio y los mismos limites
+    como instantes. Se recorta para que el tamano de los intervalos (series)
+    salga de la ventana real y no de un `end` enorme. `start` <= `end` sigue
+    valiendo: si ambos pasan el cierre, quedan iguales y la ventana esta
+    vacia.
+    """
+    duration = (operation.ended_at - operation.started_at).total_seconds()
+    start = min(params.start or 0.0, duration)
+    end = min(params.end if params.end is not None else duration, duration)
+    return (
+        start,
+        end,
+        operation.started_at + timedelta(seconds=start),
+        operation.started_at + timedelta(seconds=end),
+    )
 
 
 def _sample(

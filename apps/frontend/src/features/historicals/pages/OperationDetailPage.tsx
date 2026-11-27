@@ -11,29 +11,37 @@
 //
 // "Volver al listado" vuelve con los filtros y la pagina que el listado dejo
 // en location.state (HistoricalsListLocationState).
-import { useMemo, useState, type ReactNode } from "react";
+//
+// Exportar (tarea 5.8): el PNG es el grafico visible (de la ventana hasta el
+// cursor) y la tabla es el CSV de la ventana entera, sin reducir puntos.
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { ChartRenderer } from "@/components/charts/ChartRenderer";
-import type { ChartMode, ChartVariable } from "@/components/charts/types";
+import type { ChartHandle, ChartMode, ChartVariable } from "@/components/charts/types";
 import { IAlert, IChevronL } from "@/components/icons";
 import { useVariableCatalog } from "@/hooks/useVariableCatalog";
 import { ChartModeToggle } from "@/features/operation-viewer/components/ChartModeToggle";
 import { ControlBarsPanel } from "@/features/operation-viewer/components/ControlBarsPanel";
+import { ExportButtons } from "@/features/operation-viewer/components/ExportButtons";
 import { InstantValuePanel } from "@/features/operation-viewer/components/InstantValuePanel";
 import { OperationStrip } from "@/features/operation-viewer/components/OperationStrip";
 import { VariableSelector } from "@/features/operation-viewer/components/VariableSelector";
 import { displayedChartMode } from "@/features/operation-viewer/services/chartMode";
+import { exportFileName } from "@/features/operation-viewer/services/exportFileName";
+import { exportChartImage, hasPoints } from "@/features/operation-viewer/services/exportImage";
 import { latestSnapshot, panelVariableIds } from "@/features/operation-viewer/services/controlBars";
 import { latestValue, type InstantValue } from "@/features/operation-viewer/services/instantValues";
 import { parseTimestamp } from "@/features/operation-viewer/services/samples";
 import { DEFAULT_SELECTION } from "@/features/operation-viewer/services/variableSelection";
+import { downloadBlob } from "@/services/download";
 import type { OperationDetail } from "@/types/operation";
 import { AnalysisWindow } from "../components/AnalysisWindow";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { useOperationDetail } from "../hooks/useOperationDetail";
 import { useOperationSamples } from "../hooks/useOperationSamples";
 import { usePlayback } from "../hooks/usePlayback";
+import { historicalsApi } from "../services/historicalsApi";
 import { formatDuration, formatOperationStart, formatSampleCount } from "../services/listFilters";
 import {
   backToListHref,
@@ -274,6 +282,56 @@ function OperationViewer({ operation }: { operation: OperationDetail }) {
     !samples.isPlaceholderData &&
     chartVariables.length > 0 &&
     chartVariables.every(({ id }) => (series[id]?.length ?? 0) === 0);
+  const seriesFailed = samples.isError && !samples.isFetching && samples.data === undefined;
+
+  const chartRef = useRef<ChartHandle>(null);
+  const chartVariableIds = chartVariables.map(({ id }) => id);
+  // Lo que muestra el grafico: del inicio de la ventana hasta el cursor.
+  const shownWindow = { start: win.start, end: playback.cursor };
+  const exportPng = () =>
+    exportChartImage({
+      chart: chartRef.current,
+      image: {
+        title: t("viewer.export.image.title", { id: operation.id, name: operation.name }),
+        subtitle: t("viewer.export.image.historicalWindow", {
+          variables: chartVariableIds.join(", "),
+          from: formatMinutes(win.start, i18n.language),
+          to: formatMinutes(win.end, i18n.language),
+          cursor: formatMinutes(playback.cursor, i18n.language),
+        }),
+      },
+      fileName: exportFileName({
+        operationId: operation.id,
+        variableIds: chartVariableIds,
+        window: shownWindow,
+        extension: "png",
+      }),
+      log: {
+        source: "historicals",
+        operation_id: operation.id,
+        variables: chartVariableIds,
+        ...shownWindow,
+      },
+    });
+  // La ventana elegida entera, no solo hasta el cursor. Las variables son
+  // las elegidas; sin ninguna, el backend manda todas las del catalogo.
+  const exportCsv = async () => {
+    const csvWindow = { start: win.start, end: win.end };
+    const blob = await historicalsApi.downloadOperationSamplesCsv(operation.id, {
+      variables: selection,
+      ...csvWindow,
+    });
+    downloadBlob(
+      blob,
+      exportFileName({
+        operationId: operation.id,
+        variableIds: selection,
+        allVariables: selection.length === 0,
+        window: csvWindow,
+        extension: "csv",
+      }),
+    );
+  };
 
   return (
     <>
@@ -304,8 +362,15 @@ function OperationViewer({ operation }: { operation: OperationDetail }) {
               updating={samples.isPlaceholderData}
               noData={noData}
             />
+            <div className="ml-auto">
+              <ExportButtons
+                onExportPng={exportPng}
+                onExportCsv={exportCsv}
+                pngAvailable={!seriesFailed && hasPoints(chartVariableIds, shownSeries)}
+              />
+            </div>
           </div>
-          {samples.isError && !samples.isFetching && samples.data === undefined ? (
+          {seriesFailed ? (
             <Notice state="seriesError" alert>
               {t("historicals.detail.series.error")}
               <button
@@ -318,6 +383,7 @@ function OperationViewer({ operation }: { operation: OperationDetail }) {
             </Notice>
           ) : (
             <ChartRenderer
+              ref={chartRef}
               variables={chartVariables}
               data={shownSeries}
               mode={mode}

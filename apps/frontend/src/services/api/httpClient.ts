@@ -190,12 +190,15 @@ function send(
   });
 }
 
-async function request<T>(
+/** La respuesta final, despues de renovar el token si hizo falta. Lanza
+ *  ApiError(401) si la sesion no se pudo recuperar; cualquier otro status
+ *  lo decide el llamador. */
+async function sendWithRefresh(
   method: "GET" | "POST",
   path: string,
   body: unknown,
   options?: RequestOptions,
-): Promise<T> {
+): Promise<Response> {
   let response = await send(method, path, body, options);
 
   if (response.status === 401 && !NO_REFRESH_PATHS.includes(path)) {
@@ -220,10 +223,29 @@ async function request<T>(
     }
   }
 
+  return response;
+}
+
+async function request<T>(
+  method: "GET" | "POST",
+  path: string,
+  body: unknown,
+  options?: RequestOptions,
+): Promise<T> {
+  const response = await sendWithRefresh(method, path, body, options);
   const parsed = await parseBody(response);
   if (!response.ok) throw new ApiError(response.status, parsed);
 
   return parsed as T;
+}
+
+/** GET de un archivo (p. ej. el CSV de un historico). Un `<a href>` no
+ *  manda el token, por eso la descarga pasa por aca: mismo header y misma
+ *  renovacion que el resto. Un error trae el cuerpo parseado, como `get`. */
+async function requestBlob(path: string, options?: RequestOptions): Promise<Blob> {
+  const response = await sendWithRefresh("GET", path, undefined, options);
+  if (!response.ok) throw new ApiError(response.status, await parseBody(response));
+  return response.blob();
 }
 
 export const httpClient = {
@@ -232,4 +254,6 @@ export const httpClient = {
 
   post: <T = unknown>(path: string, body: unknown, options?: RequestOptions): Promise<T> =>
     request<T>("POST", path, body, options),
+
+  getBlob: (path: string, options?: RequestOptions): Promise<Blob> => requestBlob(path, options),
 };

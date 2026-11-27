@@ -1,19 +1,24 @@
 # GET /historicals/operations (filtros: fechas, texto; paginado)
 # GET /historicals/operations/{operation_id}
 # GET /historicals/operations/{operation_id}/samples
+# GET /historicals/operations/{operation_id}/samples.csv (tarea 5.8)
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import OperationNotFoundError
 from app.db.session import get_db
+from app.domains.audit.dependencies import ClientIp
 from app.domains.auth.dependencies import CurrentUser
+from app.domains.exports.router import ExportsServiceDep
 from app.domains.historicals.repository import OperationRepository, SampleRepository
 from app.domains.historicals.schemas import (
     OperationDetail,
     OperationPage,
     OperationSamples,
+    OperationSamplesCsvParams,
     OperationSamplesParams,
     OperationSearchParams,
 )
@@ -77,3 +82,52 @@ def get_operation_samples(
         return service.get_samples(operation_id, params)
     except OperationNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, OPERATION_NOT_FOUND) from None
+
+
+@router.get(
+    "/operations/{operation_id}/samples.csv",
+    response_class=StreamingResponse,
+    responses={
+        status.HTTP_200_OK: {
+            "content": {"text/csv": {}},
+            "description": "Tabla de muestras, separada por `;` y con coma decimal.",
+        },
+        **NOT_FOUND_RESPONSES,
+    },
+)
+def export_operation_samples_csv(
+    operation_id: str,
+    user: CurrentUser,
+    ip: ClientIp,
+    params: Annotated[OperationSamplesCsvParams, Query()],
+    service: HistoricalsServiceDep,
+    exports: ExportsServiceDep,
+) -> StreamingResponse:
+    """Muestras de una ventana de la operacion, sin reducir, como CSV.
+
+    Columnas: `timestamp` (ISO 8601, UTC) y una por variable con su unidad
+    (`POTM4 [W]`). Sin `variables`, todas las del catalogo. Formato en
+    historicals/csv_export.py. Se genera en streaming y cada descarga queda
+    registrada en la auditoria (RNF03).
+    """
+    try:
+        csv = service.export_samples_csv(operation_id, params)
+    except OperationNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, OPERATION_NOT_FOUND) from None
+
+    # Antes de mandar el archivo: lo que importa es que se pidio y se
+    # entrego, y despues de empezar el envio ya no se puede responder un error.
+    exports.log_csv_export(
+        user.username,
+        ip,
+        operation_id=operation_id,
+        variables=csv.variable_ids,
+        start=csv.start,
+        end=csv.end,
+        file_name=csv.file_name,
+    )
+    return StreamingResponse(
+        csv.chunks,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{csv.file_name}"'},
+    )
