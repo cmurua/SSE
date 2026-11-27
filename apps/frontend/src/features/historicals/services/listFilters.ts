@@ -192,3 +192,24 @@ export function formatDuration(minutes: number | null): string {
   const m = minutes % 60;
   return `${h}h ${String(m).padStart(2, "0")}m`;
 }
+
+/** Cantidad de muestras con separador de miles: "7.500" en es, "7,500" en en. */
+export function formatSampleCount(count: number, language: string): string {
+  return new Intl.NumberFormat(language === "en" ? "en-US" : "es-AR").format(count);
+}
+
+/** Que muestra la tabla: el error, las filas o el estado cargando. */
+export type ResultsStatus = "loading" | "error" | "ready";
+
+/** Estado de la tabla a partir de la query del listado. Al reintentar despues
+ *  de un error (o al aplicar de nuevo los mismos filtros), la query sigue en
+ *  error hasta que llega la respuesta: mientras tanto se muestra "cargando",
+ *  para que el boton no parezca no hacer nada. */
+export function resultsStatus(query: {
+  isError: boolean;
+  isFetching: boolean;
+  hasData: boolean;
+}): ResultsStatus {
+  if (query.isError && !query.isFetching) return "error";
+  return query.hasData && !query.isError ? "ready" : "loading";
+}

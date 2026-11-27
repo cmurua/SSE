@@ -20,16 +20,19 @@ import {
   MAX_QUERY_LENGTH,
   formatDuration,
   formatOperationStart,
+  formatSampleCount,
   hasActiveFilters,
   normalizeQuery,
   pageCount,
   pageRange,
   pageToRedirect,
   parseListParams,
+  resultsStatus,
   shownRange,
   toSearchParams,
   type HistoricalsListLocationState,
   type ListFilters,
+  type ResultsStatus,
 } from "../services/listFilters";
 
 export function HistoricalsPage() {
@@ -67,7 +70,11 @@ export function HistoricalsPage() {
     window.scrollTo({ top: 0 });
   };
 
-  const status: ResultsStatus = query.isError ? "error" : data ? "ready" : "loading";
+  const status = resultsStatus({
+    isError: query.isError,
+    isFetching: query.isFetching,
+    hasData: data !== undefined,
+  });
 
   return (
     <div className="space-y-5">
@@ -192,7 +199,7 @@ function FiltersPanel({ applied, onApply }: FiltersPanelProps) {
 // Resultados
 // --------------------------------------------------------------------------
 
-export type ResultsStatus = "loading" | "error" | "ready";
+export type { ResultsStatus };
 
 /** "Mostrando 21-40 de 137 operaciones." */
 export function ResultsCounter({ status, data }: { status: ResultsStatus; data?: OperationPage }) {
@@ -309,9 +316,7 @@ function OperationRow({
 }) {
   const { t, i18n } = useTranslation("common");
   const start = formatOperationStart(operation.started_at);
-  const samples = new Intl.NumberFormat(i18n.language === "en" ? "en-US" : "es-AR").format(
-    operation.sample_count,
-  );
+  const samples = formatSampleCount(operation.sample_count, i18n.language);
   const state: HistoricalsListLocationState = { listSearch };
 
   return (

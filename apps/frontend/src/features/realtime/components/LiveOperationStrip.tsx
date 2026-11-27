@@ -9,9 +9,9 @@ import { useTranslation } from "react-i18next";
 import type { WsStatus } from "@/services/websocket/wsClient";
 import { OperationStrip } from "@/features/operation-viewer/components/OperationStrip";
 import { formatDuration, formatTime } from "@/features/operation-viewer/services/instantValues";
+import { parseTimestamp } from "@/features/operation-viewer/services/samples";
 import { useNow } from "../hooks/useNow";
 import { dataFreshness, type DataFreshness } from "../services/dataFreshness";
-import { parseTimestamp } from "../services/realtimeBuffer";
 
 export interface LiveOperationStripProps {
   operationId: string | null;
