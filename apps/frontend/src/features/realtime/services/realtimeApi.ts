@@ -47,7 +47,11 @@ export function parseSubscription(data: unknown): RealtimeSubscription | null {
   if (!isRecord(data)) return null;
   const { operation_id, variables } = data;
   if (typeof operation_id !== "string" || !isStringArray(variables)) return null;
-  return { operation_id, variables };
+  // Opcional: un servidor anterior a la tarea 5.4 no lo manda, y eso no tiene
+  // que dejar al grafico sin datos.
+  const always = data.always_variables ?? [];
+  if (!isStringArray(always)) return null;
+  return { operation_id, variables, always_variables: always };
 }
 
 export function parseError(data: unknown): RealtimeError | null {

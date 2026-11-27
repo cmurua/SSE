@@ -17,7 +17,7 @@ export const WS_TOPIC_PATHS: Record<WsTopic, string> = {
 // servidor llega como { type, data }; la forma de `data` segun el tipo esta
 // en docs/architecture/websocket-protocol.md.
 export const WS_EVENT_TYPES = {
-  SAMPLE: "sample", // realtime.samples: una muestra, solo las variables elegidas
+  SAMPLE: "sample", // realtime.samples: una muestra (elegidas + always_variables)
   SUBSCRIBED: "subscribed", // realtime.samples: seleccion vigente + operacion en curso
   STATE_CHANGED: "state_changed", // reactor.state: estado completo del reactor
   ERROR: "error", // realtime.samples: un `subscribe` invalido; la conexion sigue

@@ -150,11 +150,13 @@ que despues muestran los historicos de esa operacion.
 1. El cliente se conecta (con token, como cualquier WS).
    - Reactor detenido: el servidor cierra con **`4409`** sin enviar nada.
    - Reactor operando: el primer mensaje es `subscribed` con la operacion en
-     curso y **ninguna variable**. Hasta que el cliente elija, no recibe
-     muestras.
+     curso, **ninguna variable elegida** y las que llegan siempre
+     (`always_variables`). Hasta que el cliente elija, las muestras traen
+     solo esas.
 2. El cliente manda `subscribe` con las variables que quiere ver. El servidor
-   responde `subscribed` (o `error`) y desde la siguiente muestra envia solo
-   esas. Se puede repetir cuantas veces haga falta **sin reconectar**.
+   responde `subscribed` (o `error`) y desde la siguiente muestra envia esas
+   mas `always_variables`. Se puede repetir cuantas veces haga falta **sin
+   reconectar**.
 3. Cada muestra guardada llega como `sample`, a ~1 Hz.
 4. Al terminar la operacion (SERMO OFF) el servidor cierra con **`4409`**,
    despues de haber enviado las ultimas muestras. Perder la senal MQTT
@@ -164,7 +166,7 @@ Un cliente nunca cambia de operacion: una operacion nueva es una conexion
 nueva. El cliente descarta su buffer cuando cambia el `operation_id`, no en
 cada reconexion: tras un corte de red dentro de la misma operacion conserva
 lo que tenia, y el hueco queda a la vista porque el eje X es el `timestamp`.
-Cada conexion nueva arranca **sin variables**, asi que al reconectar el
+Cada conexion nueva arranca **sin variables elegidas**, asi que al reconectar el
 cliente tiene que volver a mandar `subscribe`.
 
 ### `subscribe` (cliente -> servidor)
@@ -174,10 +176,12 @@ cliente tiene que volver a mandar `subscribe`.
 ```
 
 - `variables` es la **seleccion completa**, no un agregado: reemplaza la
-  anterior. `[]` deja de recibir muestras sin cortar la conexion.
+  anterior. `[]` deja de recibir las variables elegidas sin cortar la
+  conexion (`always_variables` sigue llegando).
 - IDs del catalogo (`GET /api/v1/reactor-data/variables`).
 - **Hasta 2** variables (RF05). Los repetidos cuentan una vez; el orden se
-  conserva (Variable A, Variable B).
+  conserva (Variable A, Variable B). `always_variables` no cuenta en ese
+  tope, y elegir una de ellas es valido (llega una sola vez).
 - Un pedido invalido responde `error` y **deja la seleccion anterior
   intacta**.
 
@@ -189,9 +193,21 @@ Confirma la seleccion vigente. Se envia al conectarse y como respuesta a cada
 ```json
 {
   "type": "subscribed",
-  "data": { "operation_id": "OP-2026-014", "variables": ["LOGA1", "POTM4"] }
+  "data": {
+    "operation_id": "OP-2026-014",
+    "variables": ["LOGA1", "POTM4"],
+    "always_variables": ["POSBC1", "POSBC2", "POSBC3", "POSBC4", "NN1"]
+  }
 }
 ```
+
+`always_variables` son las variables que viajan en **todas** las muestras, sin
+pedirlas: las que la pantalla de Tiempo Real muestra en el panel del nucleo,
+aparte del grafico (tarea 5.4). Hoy son las del grupo `SBC` (Barras de
+Control) del catalogo y `NN1`, el nivel de moderador en el nucleo (el tanque
+del panel). Las barras salen del catalogo por grupo (`ALWAYS_SENT_VARIABLES`
+en `app/domains/realtime/service.py`), asi que una barra nueva aparece sin
+cambiar el protocolo.
 
 Las muestras reflejan la seleccion vigente al momento de publicarse: puede
 llegar una muestra con la seleccion nueva un instante antes que su
@@ -205,7 +221,11 @@ llegar una muestra con la seleccion nueva un instante antes que su
   "data": {
     "operation_id": "OP-2026-014",
     "timestamp": "2026-11-03T14:03:27.512000Z",
-    "values": { "LOGA1": 1032.5, "POTM4": 5.1 }
+    "values": {
+      "LOGA1": 1032.5, "POTM4": 5.1,
+      "POSBC1": 58.2, "POSBC2": 54.7, "POSBC3": 49.4, "POSBC4": 46.8,
+      "NN1": 98.0
+    }
   }
 }
 ```
@@ -214,7 +234,7 @@ llegar una muestra con la seleccion nueva un instante antes que su
 |---|---|---|
 | `operation_id` | `string` | Operacion a la que pertenece la muestra |
 | `timestamp` | `string` (ISO 8601, UTC) | Momento en que se tomo la muestra; es el que queda en la base |
-| `values` | `{ [id]: number \| null }` | Solo las variables elegidas, por ID del catalogo. `null` = el canal no publico nada en esa muestra (no es un 0 medido) |
+| `values` | `{ [id]: number \| null }` | Las variables elegidas y despues las de `always_variables`, por ID del catalogo. `null` = el canal no publico nada en esa muestra (no es un 0 medido) |
 
 Schemas en `app/domains/realtime/schemas.py`.
 
@@ -246,5 +266,5 @@ Un mensaje del cliente que no se pudo atender. La conexion sigue abierta.
 
 Cada muestra se arma y serializa **una vez por seleccion distinta**, no por
 cliente (`ConnectionManager.broadcast_each`): 100 clientes mirando las mismas
-dos variables cuestan una serializacion. Un cliente sin variables elegidas no
-recibe nada.
+dos variables cuestan una serializacion. Un cliente sin variables elegidas
+recibe solo `always_variables`.

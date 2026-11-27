@@ -76,19 +76,26 @@ def test_con_el_reactor_operando_llegan_las_muestras_elegidas(live):
     with client.websocket_connect(ws_url()) as ws:
         assert receive(ws) == {
             "type": "subscribed",
-            "data": {"operation_id": operation_id, "variables": []},
+            "data": {
+                "operation_id": operation_id,
+                "variables": [],
+                "always_variables": ["POSBC1", "POSBC2", "POSBC3", "POSBC4", "NN1"],
+            },
         }
         ws.send_json({"type": "subscribe", "variables": ["POTM4"]})
         assert receive(ws)["data"]["variables"] == ["POTM4"]
 
-        emitir(client, acquisition, operation_id, potm4=5.0, loga1=1e3)
-        emitir(client, acquisition, operation_id, potm4=5.1, loga1=1e3)
+        barras = {"posbc1": 10.0, "posbc2": 20.0, "posbc3": 30.0, "posbc4": 40.0, "nn1": 98.0}
+        emitir(client, acquisition, operation_id, potm4=5.0, loga1=1e3, **barras)
+        emitir(client, acquisition, operation_id, potm4=5.1, loga1=1e3, **barras)
 
         primera, segunda = receive(ws), receive(ws)
 
+    # El panel del nucleo llega siempre, ademas de lo elegido (tarea 5.4).
+    barras_por_id = {"POSBC1": 10.0, "POSBC2": 20.0, "POSBC3": 30.0, "POSBC4": 40.0, "NN1": 98.0}
     assert primera["type"] == segunda["type"] == "sample"
-    assert primera["data"]["values"] == {"POTM4": 5.0}
-    assert segunda["data"]["values"] == {"POTM4": 5.1}
+    assert primera["data"]["values"] == {"POTM4": 5.0, **barras_por_id}
+    assert segunda["data"]["values"] == {"POTM4": 5.1, **barras_por_id}
     assert primera["data"]["operation_id"] == operation_id
 
 
