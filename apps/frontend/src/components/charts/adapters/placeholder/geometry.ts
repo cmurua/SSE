@@ -185,6 +185,9 @@ export interface TimeChartInput {
   /** Ancho fijo del eje X, con el borde derecho en la ultima muestra. Sin
    *  el, el eje se ajusta a los datos. */
   timeWindowMs?: number;
+  /** Eje X fijo, aunque los datos cubran solo una parte. Gana sobre
+   *  `timeWindowMs`. */
+  timeDomain?: [number, number];
 }
 
 /**
@@ -202,6 +205,7 @@ export function computeTimeChart({
   width,
   height,
   timeWindowMs,
+  timeDomain,
 }: TimeChartInput): TimeChartLayout | null {
   const series = variables.slice(0, 2).map((variable, index) => ({
     variable,
@@ -209,12 +213,21 @@ export function computeTimeChart({
     points: data[variable.id] ?? [],
   }));
   const withData = series.filter((s) => s.points.length > 0);
-  if (withData.length === 0) return null;
+  // Con el eje fijo se dibujan los ejes aunque todavia no haya puntos: en la
+  // reproduccion, el cursor al inicio de la ventana antes de la primera
+  // muestra no es "esperando datos".
+  if (withData.length === 0 && timeDomain === undefined) return null;
 
   // Eje X
-  const x1 = Math.max(...withData.map((s) => s.points[s.points.length - 1].t));
-  let x0 =
-    timeWindowMs !== undefined ? x1 - timeWindowMs : Math.min(...withData.map((s) => s.points[0].t));
+  let x0: number;
+  let x1: number;
+  if (timeDomain !== undefined) {
+    [x0, x1] = timeDomain;
+  } else {
+    x1 = Math.max(...withData.map((s) => s.points[s.points.length - 1].t));
+    x0 =
+      timeWindowMs !== undefined ? x1 - timeWindowMs : Math.min(...withData.map((s) => s.points[0].t));
+  }
   if (x0 >= x1) x0 = x1 - SECOND;
 
   const dual = series.length === 2 && series[0].variable.unit !== series[1].variable.unit;

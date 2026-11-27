@@ -134,6 +134,27 @@ describe("computeTimeChart", () => {
     expect(Math.max(...labels)).toBeLessThan(6);
   });
 
+  it("con timeDomain el eje X queda fijo aunque los datos cubran una parte", () => {
+    // Reproduccion de un historico: se dibuja hasta el cursor, el eje es la ventana.
+    const data = { POTM4: series([5, 6, 7]) };
+    const domain: [number, number] = [T0, T0 + 60_000];
+    const chart = computeTimeChart({ ...size, variables: [POT], data, timeDomain: domain })!;
+    expect(chart.domain).toEqual(domain);
+    // Gana sobre timeWindowMs.
+    const both = computeTimeChart({ ...size, variables: [POT], data, timeDomain: domain, timeWindowMs: 1000 })!;
+    expect(both.domain).toEqual(domain);
+  });
+
+  it("con timeDomain y sin puntos dibuja los ejes vacios en vez de esperar datos", () => {
+    const domain: [number, number] = [T0, T0 + 60_000];
+    const chart = computeTimeChart({ ...size, variables: [POT], data: { POTM4: [] }, timeDomain: domain })!;
+    expect(chart).not.toBeNull();
+    expect(chart.domain).toEqual(domain);
+    expect(chart.series[0].line).toBe("");
+    // Sin timeDomain sigue esperando datos.
+    expect(computeTimeChart({ ...size, variables: [POT], data: { POTM4: [] } })).toBeNull();
+  });
+
   it("una variable: un eje con su nombre y unidad", () => {
     const chart = computeTimeChart({ ...size, variables: [POT], data: { POTM4: series([5, 6]) } })!;
     expect(chart.yAxes).toHaveLength(1);

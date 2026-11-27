@@ -3,10 +3,11 @@
 // piezas de features/operation-viewer y el grafico via ChartRenderer.
 //
 // Los datos salen de REST: el detalle de GET /historicals/operations/{id} y
-// las series de .../samples, la operacion entera. El panel del nucleo y los
-// valores instantaneos muestran la posicion del cursor, que en esta tarea
-// queda fija en la ultima muestra; la ventana de analisis y la reproduccion
-// van en la 5.7.
+// las series de .../samples, de la ventana de analisis (tarea 5.7). La
+// operacion se recorre "como un video": el grafico se dibuja desde el inicio
+// de la ventana hasta el cursor, y el panel del nucleo y los valores
+// instantaneos muestran el instante del cursor. Al entrar, la ventana es la
+// operacion entera y el cursor esta al final.
 //
 // "Volver al listado" vuelve con los filtros y la pagina que el listado dejo
 // en location.state (HistoricalsListLocationState).
@@ -25,10 +26,14 @@ import { VariableSelector } from "@/features/operation-viewer/components/Variabl
 import { displayedChartMode } from "@/features/operation-viewer/services/chartMode";
 import { latestSnapshot, panelVariableIds } from "@/features/operation-viewer/services/controlBars";
 import { latestValue, type InstantValue } from "@/features/operation-viewer/services/instantValues";
+import { parseTimestamp } from "@/features/operation-viewer/services/samples";
 import { DEFAULT_SELECTION } from "@/features/operation-viewer/services/variableSelection";
 import type { OperationDetail } from "@/types/operation";
+import { AnalysisWindow } from "../components/AnalysisWindow";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { useOperationDetail } from "../hooks/useOperationDetail";
 import { useOperationSamples } from "../hooks/useOperationSamples";
+import { usePlayback } from "../hooks/usePlayback";
 import { formatDuration, formatOperationStart, formatSampleCount } from "../services/listFilters";
 import {
   backToListHref,
@@ -37,6 +42,20 @@ import {
   type DetailScreen,
   samplesVariableIds,
 } from "../services/operationDetail";
+import {
+  formatMinutes,
+  fullWindow,
+  isFullWindow,
+  lastPointAt,
+  operationDurationSeconds,
+  sliceSeries,
+  withWindowEnd,
+  withWindowStart,
+} from "../services/playback";
+
+/** Espera antes de pedir una ventana nueva: al soltar la manija o terminar
+ *  de moverla con el teclado, no en cada paso. */
+const WINDOW_REQUEST_DELAY_MS = 300;
 
 export function OperationDetailPage() {
   const { operationId = "" } = useParams();
@@ -78,7 +97,10 @@ export function OperationDetailView({
   return (
     <div className="space-y-5">
       <DetailHeader operationId={operationId} operation={operation} backHref={backHref} />
-      {screen === "ready" && operation && <OperationViewer operation={operation} />}
+      {screen === "ready" && operation && (
+        // Otra operacion arranca de cero: ventana entera, cursor al final.
+        <OperationViewer key={operation.id} operation={operation} />
+      )}
       {screen === "loading" && (
         <Notice state="loading">
           <span role="status">{t("historicals.detail.loading")}</span>
@@ -174,7 +196,8 @@ function OperationSummaryStrip({ operation }: { operation: OperationDetail }) {
   );
 }
 
-/** El visor: mismo armado que RealtimeAvailable, con datos de REST. */
+/** El visor: mismo armado que RealtimeAvailable, con datos de REST, mas la
+ *  ventana de analisis y la reproduccion. */
 function OperationViewer({ operation }: { operation: OperationDetail }) {
   const { t, i18n } = useTranslation("common");
   const catalog = useVariableCatalog();
@@ -187,10 +210,35 @@ function OperationViewer({ operation }: { operation: OperationDetail }) {
     () => samplesVariableIds(selection, catalog.data),
     [selection, catalog.data],
   );
-  const samples = useOperationSamples(operation.id, variableIds, catalog.data !== undefined);
+  // Ventana y cursor en segundos desde el inicio de la operacion.
+  const durationSeconds = useMemo(() => operationDurationSeconds(operation), [operation]);
+  const startedAt = useMemo(() => parseTimestamp(operation.started_at), [operation.started_at]);
+  const [win, setWin] = useState(() => fullWindow(durationSeconds));
+  const requestedWin = useDebouncedValue(win, WINDOW_REQUEST_DELAY_MS);
+  const playback = usePlayback(win);
+
+  const samples = useOperationSamples(
+    operation.id,
+    variableIds,
+    requestedWin,
+    catalog.data !== undefined,
+  );
   const series = samples.data?.series ?? EMPTY_SERIES;
-  // Posicion del cursor: fija en la ultima muestra hasta la tarea 5.7.
-  const cursorAt = samples.data?.lastSampleAt ?? null;
+
+  // Mientras llega una ventana nueva se muestran las series anteriores,
+  // recortadas a la ventana actual.
+  const winFrom = startedAt + win.start * 1000;
+  const winTo = startedAt + win.end * 1000;
+  const cursorAtMs = startedAt + playback.cursor * 1000;
+  const windowSeries = useMemo(() => sliceSeries(series, winFrom, winTo), [series, winFrom, winTo]);
+  // Lo que se ve en el cursor: desde el inicio de la ventana hasta el cursor.
+  const shownSeries = useMemo(
+    () => sliceSeries(series, winFrom, cursorAtMs),
+    [series, winFrom, cursorAtMs],
+  );
+  // La ultima muestra antes del cursor. Una variable cuyo ultimo dato es
+  // anterior se muestra como sin dato en ese instante, como en Tiempo Real.
+  const cursorAt = useMemo(() => lastPointAt(shownSeries), [shownSeries]);
 
   const selectedVariables = useMemo(() => {
     const byId = new Map((catalog.data ?? []).map((v) => [v.id, v]));
@@ -204,20 +252,22 @@ function OperationViewer({ operation }: { operation: OperationDetail }) {
 
   const instantValues = useMemo(() => {
     const values: Record<string, InstantValue | null> = {};
-    for (const { id } of selectedVariables) values[id] = latestValue(series[id], cursorAt);
+    for (const { id } of selectedVariables) values[id] = latestValue(shownSeries[id], cursorAt);
     return values;
-  }, [selectedVariables, series, cursorAt]);
+  }, [selectedVariables, shownSeries, cursorAt]);
   const controlBarsSnapshot = useMemo(
-    () => latestSnapshot(panelVariableIds(catalog.data), series, cursorAt),
-    [catalog.data, series, cursorAt],
+    () => latestSnapshot(panelVariableIds(catalog.data), shownSeries, cursorAt),
+    [catalog.data, shownSeries, cursorAt],
   );
 
+  // Las estadisticas son de la ventana entera, no solo hasta el cursor.
+  const whole = isFullWindow(win, durationSeconds);
   const statsCaption =
     samples.data?.downsampled && samples.data.bucketSeconds !== null
-      ? t("historicals.detail.statsDownsampled", {
+      ? t(whole ? "historicals.detail.statsDownsampled" : "historicals.detail.statsWindowDownsampled", {
           seconds: formatBucketSeconds(samples.data.bucketSeconds, i18n.language),
         })
-      : t("historicals.detail.stats");
+      : t(whole ? "historicals.detail.stats" : "historicals.detail.statsWindow");
 
   const noData =
     samples.isSuccess &&
@@ -269,16 +319,37 @@ function OperationViewer({ operation }: { operation: OperationDetail }) {
           ) : (
             <ChartRenderer
               variables={chartVariables}
-              data={series}
+              data={shownSeries}
               mode={mode}
-              title={t(`viewer.mode.${mode}`)}
+              title={t("historicals.detail.chartTitle", {
+                mode: t(`viewer.mode.${mode}`),
+                cursor: formatMinutes(playback.cursor, i18n.language),
+                end: formatMinutes(win.end, i18n.language),
+              })}
               height={360}
+              // El eje X queda fijo en la ventana: el grafico avanza con el
+              // cursor sin reescalar.
+              timeDomain={[winFrom, winTo]}
             />
           )}
+          <AnalysisWindow
+            durationSeconds={durationSeconds}
+            sampleCount={operation.sample_count}
+            win={win}
+            onStartChange={(seconds) => setWin((w) => withWindowStart(w, seconds, durationSeconds))}
+            onEndChange={(seconds) => setWin((w) => withWindowEnd(w, seconds, durationSeconds))}
+            cursor={playback.cursor}
+            playing={playback.playing}
+            speed={playback.speed}
+            onTogglePlay={playback.toggle}
+            onRestart={playback.restart}
+            onSeek={playback.seek}
+            onSpeedChange={playback.setSpeed}
+          />
           <InstantValuePanel
             variables={selectedVariables}
             values={instantValues}
-            series={series}
+            series={windowSeries}
             statsCaption={statsCaption}
           />
         </section>

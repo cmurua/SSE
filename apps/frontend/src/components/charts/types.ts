@@ -27,4 +27,9 @@ export interface ChartRendererProps {
    *  ultima muestra (tiempo real: la ventana avanza sola). Sin el, el eje se
    *  ajusta a los datos (historicos). */
   timeWindowMs?: number;
+  /** Modo "time": eje X fijo en [desde, hasta] (epoch ms), aunque los datos
+   *  cubran solo una parte (historico: la ventana de analisis mientras se
+   *  reproduce, para que el grafico avance sin reescalar). Tiene prioridad
+   *  sobre `timeWindowMs`. Sin puntos se dibujan los ejes vacios. */
+  timeDomain?: [number, number];
 }

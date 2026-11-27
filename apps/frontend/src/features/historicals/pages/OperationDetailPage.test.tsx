@@ -17,6 +17,7 @@ import type { RealtimeSample } from "@/types/realtime";
 import { operationDetailKey } from "../hooks/useOperationDetail";
 import { operationSamplesKey } from "../hooks/useOperationSamples";
 import { samplesVariableIds } from "../services/operationDetail";
+import { fullWindow, operationDurationSeconds } from "../services/playback";
 import {
   OperationDetailPage,
   OperationDetailView,
@@ -86,9 +87,14 @@ function renderPage({ state, detail, samples, catalog = CATALOG }: RenderOptions
   const client = new QueryClient();
   client.setQueryData(VARIABLE_CATALOG_KEY, catalog);
   if (detail) client.setQueryData(operationDetailKey(ID), detail);
-  if (samples) {
+  if (samples && detail) {
+    // Al entrar se pide la operacion entera.
     client.setQueryData(
-      operationSamplesKey(ID, samplesVariableIds(DEFAULT_SELECTION, catalog)),
+      operationSamplesKey(
+        ID,
+        samplesVariableIds(DEFAULT_SELECTION, catalog),
+        fullWindow(operationDurationSeconds(detail)),
+      ),
       samples,
     );
   }
@@ -165,7 +171,7 @@ describe("OperationDetailPage", () => {
     expect(text(html)).toContain("Valor instantaneo");
   });
 
-  it("el cursor queda en la ultima muestra: valor instantaneo y panel del nucleo", () => {
+  it("al entrar el cursor esta al final: valor instantaneo y panel del nucleo de la ultima muestra", () => {
     const html = renderPage({ detail: DETAIL, samples: FULL_SAMPLES });
     expect(text(html)).toContain("4.250 W");
     // POSBC4 no tuvo dato en la ultima muestra: sin dato, no la posicion vieja.
@@ -186,6 +192,41 @@ describe("OperationDetailPage", () => {
     const html = text(renderPage({ detail: DETAIL, samples }));
     expect(html).toContain("Min, promedio y max de toda la operacion");
     expect(html).not.toContain("sobre promedios");
+  });
+
+  it("muestra la ventana de analisis con la operacion entera", () => {
+    const html = renderPage({ detail: DETAIL, samples: FULL_SAMPLES });
+    expect(text(html)).toContain("Ventana de analisis");
+    expect(text(html)).toContain("ventana 0–125 min (125 min · 7.500 muestras)");
+    expect(html).toMatch(/Inicio \(min\)<\/span><input[^>]*value="0"/);
+    expect(html).toMatch(/Fin \(min\)<\/span><input[^>]*value="125"/);
+    // Marcas del rango: inicio, cuartos y fin.
+    for (const tick of ["00:00:00", "00:31:15", "01:02:30", "01:33:45", "02:05:00"]) {
+      expect(text(html)).toContain(tick);
+    }
+  });
+
+  it("las manijas del rango se manejan con el teclado", () => {
+    const html = renderPage({ detail: DETAIL, samples: FULL_SAMPLES });
+    const sliders = [...html.matchAll(/<div[^>]*role="slider"[^>]*>/g)].map((m) => m[0]);
+    expect(sliders).toHaveLength(2);
+    expect(sliders[0]).toContain('aria-label="Inicio de la ventana"');
+    expect(sliders[0]).toContain('aria-valuetext="00:00:00"');
+    expect(sliders[1]).toContain('aria-label="Fin de la ventana"');
+    expect(sliders[1]).toContain('aria-valuenow="7500"');
+    for (const slider of sliders) expect(slider).toContain('tabindex="0"');
+  });
+
+  it("reproduccion en pausa, con el cursor al final y 60x por defecto", () => {
+    const html = renderPage({ detail: DETAIL, samples: FULL_SAMPLES });
+    expect(html).toMatch(/aria-label="Reproducir"[^>]*data-playing="false"/);
+    expect(text(html)).toContain("Reiniciar");
+    const pressed = [...html.matchAll(/aria-pressed="true"[^>]*>([^<]+)</g)].map((m) => m[1]);
+    expect(pressed).toContain("60×");
+    for (const speed of ["1×", "10×", "600×"]) expect(text(html)).toContain(speed);
+    expect(html).toMatch(/aria-label="Cursor de la reproduccion"/);
+    expect(text(html)).toContain("cursor = 02:05:00");
+    expect(text(html)).toContain("t = 125 / 125 min");
   });
 
   it("avisa si las variables elegidas no tienen datos en la operacion", () => {

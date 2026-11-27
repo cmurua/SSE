@@ -49,6 +49,7 @@ export function PlaceholderChartAdapter({
   title,
   height = DEFAULT_HEIGHT,
   timeWindowMs,
+  timeDomain,
 }: ChartRendererProps) {
   const { t } = useTranslation("common");
   const [ref, width] = useElementWidth();
@@ -79,7 +80,7 @@ export function PlaceholderChartAdapter({
       );
     }
   } else {
-    const layout = computeTimeChart({ variables: shown, data, width, height, timeWindowMs });
+    const layout = computeTimeChart({ variables: shown, data, width, height, timeWindowMs, timeDomain });
     if (layout === null) {
       message = <Message title={t("chart.waiting")} />;
     } else {
