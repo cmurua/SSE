@@ -29,7 +29,6 @@ from app.domains.historicals.router import router as historicals_router
 from app.domains.reactor_data.router import router as reactor_data_router
 from app.domains.reactor_state.router import router as reactor_state_router
 from app.domains.realtime.router import router as realtime_router
-from app.domains.reports.router import router as reports_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
@@ -38,5 +37,4 @@ api_router.include_router(reactor_state_router, prefix="/reactor-state", tags=["
 api_router.include_router(realtime_router, prefix="/realtime", tags=["realtime"])
 api_router.include_router(historicals_router, prefix="/historicals", tags=["historicals"])
 api_router.include_router(exports_router, prefix="/exports", tags=["exports"])
-api_router.include_router(reports_router, prefix="/reports", tags=["reports"])
 api_router.include_router(help_router, prefix="/help", tags=["help"])

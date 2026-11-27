@@ -26,6 +26,10 @@
   `docs/decisions/0006-mecanismo-lectura-tiempo-real.md`.
 - Latencia objetivo <= 2s (RNF01), ~100 usuarios concurrentes (criterio
   no funcional del pedido de estructura; la SRS original menciona 40).
+- **RF08 (sugerencias y reportes de error) queda fuera de alcance** por
+  decision del equipo. Se retiro el stub (endpoint `POST /reports`, tabla
+  `reports` y pantalla de Sugerencias) en la tarea 6.1; la migracion
+  `c4e8a1f05b37` borra la tabla.
 
 ## Verificacion del RNF01 (latencia de 2 s o menos)
 

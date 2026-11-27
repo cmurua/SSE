@@ -1,5 +1,5 @@
 // Setup de i18next. Namespaces alineados con los grupos de labels.jsx del
-// prototipo (nav, login, home, realtime, historicals, reports, help).
+// prototipo (nav, login, home, realtime, historicals, help).
 // SUPUESTO: solo se completan las claves en espanol por ahora (RF09 pide
 // es/en, "no hace falta implementarla completa ahora" segun el pedido).
 import i18n from "i18next";

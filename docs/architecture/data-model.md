@@ -107,9 +107,6 @@ en NULL las muestras ya cargadas. En desarrollo se regeneran con
 Soporte de auth (RF01-03): revocacion de sesion y control de intentos
 fallidos.
 
-## reports
-Sugerencias y reportes de error (RF08).
-
 ## audit_logs
 Trazabilidad (RNF03): accesos, errores, exportaciones, consultas,
 conexiones WebSocket.
