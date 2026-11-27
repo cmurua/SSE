@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from zoneinfo import ZoneInfo
 
 from app.core.exceptions import OperationNotFoundError
+from app.core.timezone import LOCAL_TIMEZONE
 from app.domains.exports.file_names import export_file_name
 from app.domains.historicals.csv_export import csv_chunks
 from app.domains.historicals.csv_export import header as csv_header
@@ -30,8 +30,8 @@ from app.domains.realtime.schemas import RealtimeSample
 
 # Las fechas que elige el usuario son dias del calendario del reactor, no de
 # UTC: una operacion que empieza el 9 a las 22:00 en Cordoba (01:00 UTC del
-# 10) tiene que aparecer al filtrar por el 9.
-LOCAL_TIMEZONE = ZoneInfo("America/Argentina/Cordoba")
+# 10) tiene que aparecer al filtrar por el 9. La zona es LOCAL_TIMEZONE
+# (app/core/timezone.py).
 
 # El CSV sin `variables` lleva el catalogo entero, en el orden del catalogo.
 ALL_VARIABLE_IDS = tuple(variable["id"] for variable in REACTOR_VARIABLES)

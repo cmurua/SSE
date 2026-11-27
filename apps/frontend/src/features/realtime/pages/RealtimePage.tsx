@@ -297,22 +297,12 @@ function RealtimeUnavailable() {
       iconClassName="bg-bad-soft text-bad"
       eyebrow={`${t("sermo.label")} · ${t("sermo.off")}`}
       title={t("realtime.unavailable.title")}
-      lead={t("realtime.unavailable.lead")}
     >
       {/* RF04 deja solo los historicos al terminar la operacion: la que
           acaba de cerrar ya aparece en el listado (Milestone 5). */}
       <Link to="/historicals" className="btn-dark mt-6">
         {t("realtime.unavailable.goHistoricals")}
       </Link>
-      <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-6 text-left max-w-2xl w-full">
-        <Fact
-          label={t("realtime.facts.state")}
-          value={t("sermo.status.stopped")}
-          valueClassName="text-bad"
-        />
-        <Fact label={t("realtime.facts.sermo")} value="false" mono />
-        <Fact label={t("realtime.facts.acquisition")} value={t("realtime.facts.paused")} />
-      </div>
     </StatusCard>
   );
 }
@@ -344,7 +334,8 @@ interface StatusCardProps {
   iconClassName: string;
   eyebrow: string;
   title: string;
-  lead: string;
+  /** Opcional: sin texto, la tarjeta queda con el titulo y lo que venga abajo. */
+  lead?: string;
   children?: ReactNode;
 }
 
@@ -363,34 +354,8 @@ function StatusCard({ icon, iconClassName, eyebrow, title, lead, children }: Sta
         {eyebrow}
       </div>
       <h2 className="text-[22px] font-semibold mb-2">{title}</h2>
-      <p className="text-[14px] text-muted max-w-md">{lead}</p>
+      {lead && <p className="text-[14px] text-muted max-w-md">{lead}</p>}
       {children}
-    </div>
-  );
-}
-
-// Puerto de KV (Realtime.jsx), con una clase en vez de un color inline.
-function Fact({
-  label,
-  value,
-  mono = false,
-  valueClassName = "",
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  valueClassName?: string;
-}) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-widest text-muted font-mono">{label}</div>
-      <div
-        className={
-          "mt-1 text-[15px] font-semibold " + (mono ? "font-mono " : "") + valueClassName
-        }
-      >
-        {value}
-      </div>
     </div>
   );
 }

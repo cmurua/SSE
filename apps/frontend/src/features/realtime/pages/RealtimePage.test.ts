@@ -42,7 +42,6 @@ describe("realtimeScreen", () => {
   const KEYS = [
     "realtime.title",
     "realtime.unavailable.title",
-    "realtime.unavailable.lead",
     "realtime.unavailable.goHistoricals",
     "realtime.unknown.title",
     "realtime.unknown.serverLost",
@@ -75,10 +74,6 @@ describe("realtimeScreen", () => {
     "chart.axisLeft",
     "chart.axisRight",
     "chart.ariaTime",
-    "realtime.facts.state",
-    "realtime.facts.sermo",
-    "realtime.facts.acquisition",
-    "realtime.facts.paused",
     "sermo.label",
     "sermo.on",
     "sermo.off",

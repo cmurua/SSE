@@ -35,6 +35,16 @@ import {
   type ResultsStatus,
 } from "../services/listFilters";
 
+/** Columnas del listado, compartidas por el encabezado, las filas y el
+ *  esqueleto de carga. Mismas proporciones que las 2/4/2/2/1 de 12 del
+ *  prototipo, pero la ultima (el boton "Ir a la operacion") tiene ancho fijo:
+ *  con 1 de 12 el boton no entraba y la tarjeta lo recortaba. Fijo y no
+ *  `auto` porque cada fila es una grilla aparte: con `auto` el encabezado
+ *  (sin boton) repartiria distinto y los titulos no quedarian sobre sus
+ *  columnas. 8rem alcanza para el boton en es, en y pt. */
+const LIST_GRID =
+  "grid grid-cols-[minmax(0,2fr)_minmax(0,4fr)_minmax(0,2fr)_minmax(0,2fr)_minmax(0,1fr)_8rem] gap-4";
+
 export function HistoricalsPage() {
   const { t } = useTranslation("common");
   const [searchParams, setSearchParams] = useSearchParams();
@@ -287,13 +297,13 @@ export function OperationsResults({
 
   return (
     <section className="col-span-12 lg:col-span-9 card overflow-hidden">
-      <div className="grid grid-cols-12 gap-4 px-5 py-3 bg-surface-hover border-b border-line text-[11px] uppercase tracking-widest text-muted font-mono">
-        <div className="col-span-2">{t("historicals.list.columns.id")}</div>
-        <div className="col-span-4">{t("historicals.list.columns.operation")}</div>
-        <div className="col-span-2">{t("historicals.list.columns.date")}</div>
-        <div className="col-span-2">{t("historicals.list.columns.operator")}</div>
-        <div className="col-span-1 text-right">{t("historicals.list.columns.samples")}</div>
-        <div className="col-span-1 text-right normal-case tracking-normal">
+      <div className={`${LIST_GRID} px-5 py-3 bg-surface-hover border-b border-line text-[11px] uppercase tracking-widest text-muted font-mono`}>
+        <div>{t("historicals.list.columns.id")}</div>
+        <div>{t("historicals.list.columns.operation")}</div>
+        <div>{t("historicals.list.columns.date")}</div>
+        <div>{t("historicals.list.columns.operator")}</div>
+        <div className="text-right">{t("historicals.list.columns.samples")}</div>
+        <div className="text-right normal-case tracking-normal">
           {updating && <span role="status">{t("historicals.list.updating")}</span>}
         </div>
       </div>
@@ -322,10 +332,10 @@ function OperationRow({
   return (
     <div
       data-operation={operation.id}
-      className="grid grid-cols-12 gap-4 px-5 py-4 border-b border-line items-center hover-surface"
+      className={`${LIST_GRID} px-5 py-4 border-b border-line items-center hover-surface`}
     >
-      <div className="col-span-2 font-mono text-[12px] font-medium break-all">{operation.id}</div>
-      <div className="col-span-4 min-w-0">
+      <div className="font-mono text-[12px] font-medium break-all">{operation.id}</div>
+      <div className="min-w-0">
         <div className="text-[14px] font-semibold truncate" title={operation.name}>
           {operation.name}
         </div>
@@ -335,15 +345,15 @@ function OperationRow({
           </div>
         )}
       </div>
-      <div className="col-span-2 font-mono text-[12px]">
+      <div className="font-mono text-[12px]">
         {start.day}
-        <div className="text-[10px] text-muted">
+        <div className="text-[10px] text-muted whitespace-nowrap">
           {start.time} · {formatDuration(operation.duration_minutes)}
         </div>
       </div>
-      <div className="col-span-2 text-[12px]">{operation.operator}</div>
-      <div className="col-span-1 text-right font-mono text-[12px]">{samples}</div>
-      <div className="col-span-1 text-right">
+      <div className="text-[12px]">{operation.operator}</div>
+      <div className="text-right font-mono text-[12px]">{samples}</div>
+      <div className="text-right">
         <Link
           to={`/historicals/${encodeURIComponent(operation.id)}`}
           state={state}
@@ -446,14 +456,14 @@ function SkeletonRows() {
         <div
           key={i}
           aria-hidden="true"
-          className="grid grid-cols-12 gap-4 px-5 py-5 border-b border-line items-center"
+          className={`${LIST_GRID} px-5 py-5 border-b border-line items-center`}
         >
-          <div className={`col-span-2 ${bar}`} />
-          <div className={`col-span-4 ${bar}`} />
-          <div className={`col-span-2 ${bar}`} />
-          <div className={`col-span-2 ${bar}`} />
-          <div className={`col-span-1 ${bar}`} />
-          <div className="col-span-1" />
+          <div className={bar} />
+          <div className={bar} />
+          <div className={bar} />
+          <div className={bar} />
+          <div className={bar} />
+          <div />
         </div>
       ))}
     </div>

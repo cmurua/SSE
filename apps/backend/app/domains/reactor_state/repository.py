@@ -75,6 +75,11 @@ class OperationLifecycleRepository:
                 "operator": operation.operator,
             }
 
+    def last_ended_at(self) -> datetime | None:
+        """Cierre mas reciente de todas las operaciones, o None si no hay."""
+        with self._session_factory() as session:
+            return session.scalar(select(func.max(Operation.ended_at)))
+
     def open(
         self,
         *,
