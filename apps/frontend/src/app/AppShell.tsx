@@ -11,7 +11,6 @@ import { IHelp, ILogOut } from "@/components/icons";
 const NAV_ITEMS = [
   { to: "/realtime", labelKey: "nav.realtime" },
   { to: "/historicals", labelKey: "nav.historicals" },
-  { to: "/reports", labelKey: "nav.reports" },
   { to: "/help", labelKey: "nav.help" },
   { to: "/about", labelKey: "nav.about" },
 ];

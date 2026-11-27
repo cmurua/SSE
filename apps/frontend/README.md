@@ -29,6 +29,6 @@ npm run test
 ```
 
 Pantallas portadas desde el prototipo de Claude Design (`SSE V1.zip`):
-Home, Login, Realtime, Historicals (ex-"Histories"), Reports
-(ex-"Suggestions"), Help, About. Ver `src/features/*` y
+Home, Login, Realtime, Historicals (ex-"Histories"), Help, About. La de
+Suggestions no se porto: el modulo de sugerencias quedo fuera de alcance. Ver `src/features/*` y
 `src/components/charts/README.md` para la abstraccion de graficos.
