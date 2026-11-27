@@ -97,6 +97,15 @@ visible. Se descarto retomar la misma operacion porque obliga a decidir que
 hacer con el hueco y a sostener un estado "esperando confirmacion" con
 temporizador, complejidad que el MVP no justifica.
 
+La segunda operacion **no hereda la hora del retenido**. El retenido trae la
+hora en que SERMO paso a ON, que es anterior al cierre que se acaba de
+registrar: usarla superpondria las dos operaciones y la segunda mostraria un
+hueco sin muestras al principio (paso en desarrollo con `--reload`, que
+reinicia el backend al guardar un archivo). Regla: una operacion no empieza
+antes del ultimo cierre registrado; si el ON es anterior, la operacion empieza
+al abrirse, que es cuando arranca su toma de datos
+(`ReactorStateService._start_time`).
+
 **Orden al detener.** Primero se corta la toma de datos, despues se cierra la
 operacion. Al reves, el bucle podria escribir una muestra con timestamp
 posterior al `ended_at`, y una muestra fuera del intervalo de su propia

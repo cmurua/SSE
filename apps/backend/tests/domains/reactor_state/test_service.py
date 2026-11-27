@@ -9,14 +9,17 @@ from datetime import UTC, datetime
 
 from sqlalchemy.exc import OperationalError
 
+from app.core.timezone import LOCAL_TIMEZONE
 from app.domains.reactor_state.schemas import ReactorStatus
 from app.domains.reactor_state.service import ReactorStateService
 from app.mqtt.schemas import SermoSignal
 
 
 class FakeOperationRepository:
-    def __init__(self, open_operation=None):
+    def __init__(self, open_operation=None, last_ended_at=None):
         self._open = open_operation
+        # Cierre mas reciente de las operaciones que ya estaban en la base.
+        self._last_ended_at = last_ended_at
         self.opened = []
         self.closed = []
         self._sequence = 0
@@ -29,6 +32,12 @@ class FakeOperationRepository:
 
     def find_open(self):
         return self._open
+
+    def last_ended_at(self):
+        self._check()
+        ends = [c["ended_at"] for c in self.closed] + [self._last_ended_at]
+        ends = [end for end in ends if end is not None]
+        return max(ends) if ends else None
 
     def open(self, *, name, operator, notes, started_at):
         self._check()
@@ -47,7 +56,8 @@ class FakeOperationRepository:
         if self._open is None:
             return None
         closed, self._open = self._open, None
-        closed["ended_at"] = ended_at
+        # Como el repositorio real: sin hora de cierre, se cierra ahora.
+        closed["ended_at"] = ended_at or datetime.now(UTC)
         self.closed.append(closed)
         return closed
 
@@ -267,6 +277,76 @@ async def test_reconcile_sin_operacion_abierta_no_hace_nada():
     await service.reconcile_on_startup()
 
     assert repository.closed == []
+
+
+async def test_reinicio_en_medio_de_un_ensayo_no_hereda_la_hora_de_inicio():
+    # El caso real (OP-2026-007 a 009): el backend se reinicia con el reactor
+    # operando, cierra la operacion que quedo abierta y el ON retenido, con la
+    # hora del encendido original, abre la siguiente. Esa hora es anterior al
+    # cierre: la nueva tiene que empezar despues, no superponerse.
+    encendido = datetime(2026, 11, 18, 22, 3, 17, tzinfo=UTC)
+    stale = {
+        "id": "OP-2026-006",
+        "name": "Operacion 18/11/2026 19:03",
+        "operator": "Desconocido",
+        "started_at": encendido,
+    }
+    service, repository, _ = build_service(FakeOperationRepository(open_operation=stale))
+
+    await service.reconcile_on_startup()
+    await service.apply_signal(SermoSignal(sermo=True, timestamp=encendido))
+
+    cierre = repository.closed[0]["ended_at"]
+    started_at = repository.opened[0]["started_at"]
+    assert started_at >= cierre
+    # Tiempo Real muestra este inicio: tiene que ser el guardado.
+    assert service.get_current_state().updated_at == started_at
+
+
+async def test_on_con_hora_anterior_al_ultimo_cierre_empieza_ahora():
+    ultimo_cierre = datetime(2026, 11, 18, 23, 9, 24, tzinfo=UTC)
+    service, repository, _ = build_service(
+        FakeOperationRepository(last_ended_at=ultimo_cierre)
+    )
+    antes = datetime.now(UTC)
+
+    await service.apply_signal(
+        SermoSignal(sermo=True, timestamp=datetime(2026, 11, 18, 22, 3, 17, tzinfo=UTC))
+    )
+
+    started_at = repository.opened[0]["started_at"]
+    assert started_at >= antes
+    assert repository.opened[0]["name"] == _local_name(started_at)
+
+
+async def test_on_posterior_al_ultimo_cierre_conserva_su_hora():
+    # El caso normal: el ON es nuevo y su hora es la del encendido real,
+    # aunque llegue tarde (por ejemplo, despues de esperar a la base).
+    service, repository, _ = build_service(
+        FakeOperationRepository(last_ended_at=datetime(2026, 11, 18, 20, 0, tzinfo=UTC))
+    )
+    encendido = datetime(2026, 11, 18, 22, 3, 17, tzinfo=UTC)
+
+    await service.apply_signal(SermoSignal(sermo=True, timestamp=encendido))
+
+    assert repository.opened[0]["started_at"] == encendido
+    assert service.get_current_state().updated_at == encendido
+
+
+async def test_el_nombre_por_defecto_usa_la_hora_de_cordoba():
+    # El listado muestra el inicio en hora de Cordoba; el nombre tiene que
+    # decir lo mismo y no la hora UTC.
+    service, repository, _ = build_service()
+
+    await service.apply_signal(
+        SermoSignal(sermo=True, timestamp=datetime(2026, 11, 18, 22, 3, 17, tzinfo=UTC))
+    )
+
+    assert repository.opened[0]["name"] == "Operacion 18/11/2026 19:03"
+
+
+def _local_name(started_at):
+    return f"Operacion {started_at.astimezone(LOCAL_TIMEZONE).strftime('%d/%m/%Y %H:%M')}"
 
 
 async def test_los_listeners_reciben_cada_cambio():

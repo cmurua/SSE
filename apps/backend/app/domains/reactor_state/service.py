@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.core.timezone import LOCAL_TIMEZONE
 from app.domains.reactor_state.repository import OperationLifecycleRepository
 from app.domains.reactor_state.schemas import ReactorState
 from app.mqtt.schemas import SermoSignal
@@ -259,11 +260,15 @@ class ReactorStateService:
 
         if transition.sermo:
             await self._start_operation(transition.occurred_at, transition.metadata)
+            # Con SERMO en ON, `updated_at` es el inicio de la operacion (el
+            # frontend lo usa para la hora de inicio y la duracion): tiene que
+            # ser el que quedo guardado, que puede no ser la hora del mensaje.
+            self._updated_at = self._operation_started_at or transition.occurred_at
         else:
             await self._end_operation(transition.occurred_at)
+            self._updated_at = transition.occurred_at
 
         self._sermo = transition.sermo
-        self._updated_at = transition.occurred_at
         return True
 
     async def _retry_pending(self) -> None:
@@ -319,7 +324,8 @@ class ReactorStateService:
         )
         await self._acquisition.start(self._operation_id, self._operation_started_at)
 
-    async def _start_operation(self, started_at: datetime, metadata: object | None) -> None:
+    async def _start_operation(self, occurred_at: datetime, metadata: object | None) -> None:
+        started_at = await self._start_time(occurred_at)
         name = _attr(metadata, "name") or _default_operation_name(started_at)
         operator = _attr(metadata, "operator") or self._default_operator
         notes = _attr(metadata, "notes") or self._default_notes
@@ -335,6 +341,31 @@ class ReactorStateService:
         self._operation_started_at = operation["started_at"]
         logger.info("SERMO ON: operacion %s abierta (%s).", operation["id"], name)
         await self._acquisition.start(operation["id"], operation["started_at"])
+
+    async def _start_time(self, occurred_at: datetime) -> datetime:
+        """Inicio de la operacion: la hora del ON, salvo que sea vieja.
+
+        El ON viene retenido en el broker con la hora en que SERMO paso a ON.
+        Si el backend se reinicia en medio de un ensayo, al arrancar cierra la
+        operacion que quedo abierta y el retenido abre una nueva con esa misma
+        hora, que es anterior al cierre que se acaba de registrar: la nueva
+        operacion se superpondria con la anterior y el historico mostraria un
+        hueco sin muestras al principio. Una operacion no puede empezar antes
+        de que termine la anterior; en ese caso empieza ahora, que es cuando
+        arranca de verdad su toma de datos.
+        """
+        last_end = await asyncio.to_thread(self._repository.last_ended_at)
+        if last_end is None or occurred_at >= last_end:
+            return occurred_at
+        started_at = max(datetime.now(UTC), last_end)
+        logger.info(
+            "SERMO ON con hora %s, anterior al ultimo cierre (%s): mensaje retenido "
+            "de un ensayo ya registrado. La operacion empieza %s.",
+            occurred_at.isoformat(),
+            last_end.isoformat(),
+            started_at.isoformat(),
+        )
+        return started_at
 
     async def _end_operation(self, ended_at: datetime) -> None:
         # Primero se corta la toma de datos y despues se cierra la operacion:
@@ -369,8 +400,12 @@ def _default_operation_name(started_at: datetime) -> str:
     PENDIENTE: la FPGA no sabe como se llama el ensayo ni quien lo conduce, y
     el sistema es de solo lectura, asi que hoy no hay forma de que un operador
     lo nombre. Queda como deuda para el equipo (ver ADR 0004).
+
+    La hora va en la de Cordoba, la misma que muestra el listado de
+    historicos: en UTC el nombre diria 22:03 al lado de un inicio a las 19:03.
     """
-    return f"Operacion {started_at.strftime('%d/%m/%Y %H:%M')}"
+    local = started_at.astimezone(LOCAL_TIMEZONE)
+    return f"Operacion {local.strftime('%d/%m/%Y %H:%M')}"
 
 
 def _attr(metadata: object | None, field: str) -> str | None:
