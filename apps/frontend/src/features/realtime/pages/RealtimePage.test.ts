@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import i18n from "@/i18n";
 import {
-  displayedChartMode,
   operationStartedAt,
   realtimeScreen,
   streamOperationId,
@@ -29,15 +28,6 @@ describe("realtimeScreen", () => {
     expect(streamOperationId({ sermo: true, operation_id: "OP-1" })).toBe("OP-1");
   });
 
-  it("muestra el modo X·Y solo con 2 variables, sin olvidar que se eligio", () => {
-    expect(displayedChartMode("time", 2)).toBe("time");
-    expect(displayedChartMode("xy", 2)).toBe("xy");
-    // Con una sola variable no hay X·Y...
-    expect(displayedChartMode("xy", 1)).toBe("time");
-    expect(displayedChartMode("xy", 0)).toBe("time");
-    // ...pero el modo elegido sigue siendo "xy": al volver a 2, vuelve solo.
-  });
-
   it("la hora de inicio es updated_at solo con el reactor operando", () => {
     expect(operationStartedAt(null)).toBeNull();
     expect(operationStartedAt({ sermo: false, updated_at: "2026-11-18T14:00:00Z" })).toBeNull();
@@ -46,7 +36,8 @@ describe("realtimeScreen", () => {
     );
   });
 
-  // Claves que usa la pagina. Si se agrega una, sumarla aca.
+  // Claves que usa la pagina. Si se agrega una, sumarla aca. Las de los
+  // componentes compartidos (viewer.*) se prueban en operation-viewer.
   const KEYS = [
     "realtime.title",
     "realtime.unavailable.title",
@@ -56,18 +47,6 @@ describe("realtimeScreen", () => {
     "realtime.unknown.serverLost",
     "realtime.unknown.signalLost",
     "realtime.loading",
-    "realtime.variables.title",
-    "realtime.variables.hint",
-    "realtime.variables.selected",
-    "realtime.variables.none",
-    "realtime.variables.remove",
-    "realtime.variables.search",
-    "realtime.variables.loading",
-    "realtime.variables.loadError",
-    "realtime.variables.retry",
-    "realtime.variables.noResults",
-    "realtime.variables.setpoint",
-    "realtime.variables.limitReached",
     "realtime.subscribeErrors.invalid_message",
     "realtime.subscribeErrors.unknown_variable",
     "realtime.subscribeErrors.too_many_variables",
@@ -83,16 +62,7 @@ describe("realtimeScreen", () => {
     "realtime.operation.freshness.connecting",
     "realtime.operation.freshness.waiting",
     "realtime.operation.freshness.idle",
-    "realtime.instant.value",
-    "realtime.instant.noData",
-    "realtime.instant.min",
-    "realtime.instant.mean",
-    "realtime.instant.max",
-    "realtime.instant.window",
-    "realtime.mode.label",
-    "realtime.mode.time",
-    "realtime.mode.xy",
-    "realtime.mode.xyNeedsTwo",
+    "realtime.statsWindow",
     "chart.empty.title",
     "chart.empty.lead",
     "chart.waiting",

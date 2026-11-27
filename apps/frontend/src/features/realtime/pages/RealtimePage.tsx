@@ -16,15 +16,18 @@ import type { ChartMode, ChartVariable } from "@/components/charts/types";
 import { IAlert } from "@/components/icons";
 import type { ReactorView } from "@/store/reactorStateStore";
 import type { RealtimeError } from "@/types/realtime";
-import { InstantValuePanel } from "../components/InstantValuePanel";
-import { OperationStrip } from "../components/OperationStrip";
-import { VariableSelector } from "../components/VariableSelector";
+import { ChartModeToggle } from "@/features/operation-viewer/components/ChartModeToggle";
+import { InstantValuePanel } from "@/features/operation-viewer/components/InstantValuePanel";
+import { VariableSelector } from "@/features/operation-viewer/components/VariableSelector";
+import { displayedChartMode } from "@/features/operation-viewer/services/chartMode";
+import { latestValue, type InstantValue } from "@/features/operation-viewer/services/instantValues";
+import { DEFAULT_SELECTION } from "@/features/operation-viewer/services/variableSelection";
+import { LiveOperationStrip } from "../components/LiveOperationStrip";
 import { useLatencyProbe } from "../hooks/useLatencyProbe";
 import { useReactorState } from "../hooks/useReactorState";
 import { useRealtimeSocket, type RealtimeSnapshot } from "../hooks/useRealtimeSocket";
 import { useVariableCatalog } from "../hooks/useVariableCatalog";
 import { REALTIME_WINDOW_MS } from "../services/realtimeBuffer";
-import { DEFAULT_SELECTION } from "../services/variableSelection";
 
 export type RealtimeScreen = "available" | "unavailable" | "unknown" | "loading";
 
@@ -60,13 +63,6 @@ export function streamOperationId(state: { sermo: boolean; operation_id: string 
  *  operacion. */
 export function operationStartedAt(state: { sermo: boolean; updated_at: string } | null) {
   return state?.sermo ? state.updated_at : null;
-}
-
-/** Modo que se muestra: el elegido, salvo que no haya 2 variables para el
- *  X·Y. Se guarda el elegido aparte para que, si se quita la Variable B y se
- *  elige otra, el grafico vuelva solo a X·Y. */
-export function displayedChartMode(preferred: ChartMode, variableCount: number): ChartMode {
-  return preferred === "xy" && variableCount < 2 ? "time" : preferred;
 }
 
 export function RealtimePage() {
@@ -142,6 +138,14 @@ function RealtimeAvailable({
     [selectedVariables],
   );
   const mode = displayedChartMode(preferredMode, chartVariables.length);
+  // En vivo se muestra el ultimo valor de cada variable.
+  const instantValues = useMemo(() => {
+    const values: Record<string, InstantValue | null> = {};
+    for (const { id } of selectedVariables) {
+      values[id] = latestValue(realtime.series[id], realtime.lastSampleAt);
+    }
+    return values;
+  }, [selectedVariables, realtime.series, realtime.lastSampleAt]);
 
   return (
     <div className="grid grid-cols-12 gap-5">
@@ -156,7 +160,7 @@ function RealtimeAvailable({
         />
       </aside>
       <section className="col-span-12 lg:col-span-8 xl:col-span-9 space-y-4">
-        <OperationStrip
+        <LiveOperationStrip
           operationId={operationId}
           startedAt={startedAt}
           connection={realtime.connection}
@@ -165,7 +169,7 @@ function RealtimeAvailable({
           receivedAt={realtime.receivedAt}
         />
         {realtime.error && <SubscribeError error={realtime.error} />}
-        <ModeToggle
+        <ChartModeToggle
           mode={mode}
           xyAvailable={chartVariables.length >= 2}
           onChange={onModeChange}
@@ -174,57 +178,17 @@ function RealtimeAvailable({
           variables={chartVariables}
           data={realtime.series}
           mode={mode}
-          title={t(`realtime.mode.${mode}`)}
+          title={t(`viewer.mode.${mode}`)}
           height={360}
           timeWindowMs={REALTIME_WINDOW_MS}
         />
         <InstantValuePanel
           variables={selectedVariables}
+          values={instantValues}
           series={realtime.series}
-          lastSampleAt={realtime.lastSampleAt}
+          statsCaption={t("realtime.statsWindow")}
         />
       </section>
-    </div>
-  );
-}
-
-/** "Variable vs. tiempo" / "Variable vs. variable", como en el prototipo. */
-function ModeToggle({
-  mode,
-  xyAvailable,
-  onChange,
-}: {
-  mode: ChartMode;
-  xyAvailable: boolean;
-  onChange: (mode: ChartMode) => void;
-}) {
-  const { t } = useTranslation("common");
-  const option = (value: ChartMode, disabled = false) => (
-    <button
-      type="button"
-      onClick={() => onChange(value)}
-      disabled={disabled}
-      aria-pressed={mode === value}
-      title={disabled ? t("realtime.mode.xyNeedsTwo") : undefined}
-      className={
-        "px-3 py-1 text-[12px] rounded-full font-medium " +
-        (mode === value ? "bg-surface shadow-sm" : "text-muted") +
-        (disabled ? " opacity-40 cursor-not-allowed" : "")
-      }
-    >
-      {t(`realtime.mode.${value}`)}
-    </button>
-  );
-
-  return (
-    <div className="card flex flex-wrap items-center gap-3 px-4 py-3">
-      <div role="group" aria-label={t("realtime.mode.label")} className="flex items-center gap-1 bg-app rounded-full p-1">
-        {option("time")}
-        {option("xy", !xyAvailable)}
-      </div>
-      {!xyAvailable && (
-        <span className="text-[11px] text-muted">{t("realtime.mode.xyNeedsTwo")}</span>
-      )}
     </div>
   );
 }

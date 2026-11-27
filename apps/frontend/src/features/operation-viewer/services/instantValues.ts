@@ -1,13 +1,9 @@
 // Logica del panel de valor instantaneo y de la franja de la operacion
-// (tarea 3.7): formato de valores y horas, ultimo valor de cada variable,
-// estadisticas de la ventana y si los datos estan al dia. Funciones puras,
-// separadas de los componentes para probarlas sin renderizar.
+// (tareas 3.7 y 5.3): formato de valores y horas, ultimo valor de cada
+// variable y estadisticas de una serie. Funciones puras, separadas de los
+// componentes para probarlas sin renderizar. No dependen de donde salen los
+// datos (WebSocket o REST): las usan Tiempo Real y el historico.
 import type { ChartPoint } from "@/components/charts/types";
-import type { WsStatus } from "@/services/websocket/wsClient";
-
-/** Sin muestras por mas de esto, los datos se marcan desactualizados: tres
- *  periodos de muestreo (1 Hz) mas el margen de latencia del RNF01 (2 s). */
-export const STALE_AFTER_MS = 5_000;
 
 /**
  * Un valor medido, segun su magnitud: notacion cientifica por encima de 1e5
@@ -44,11 +40,12 @@ export function formatDuration(ms: number): string {
   return `${pad(Math.floor(total / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
 }
 
-export interface LatestValue {
+/** Valor que muestra el panel para una variable. */
+export interface InstantValue {
   value: number;
   t: number;
-  /** false = la ultima muestra no trajo dato para esta variable (el canal
-   *  publico null) y `value` es de una muestra anterior. */
+  /** false = la muestra que se esta mirando no trajo dato para esta
+   *  variable (el canal publico null) y `value` es de una muestra anterior. */
   current: boolean;
 }
 
@@ -60,7 +57,7 @@ export interface LatestValue {
 export function latestValue(
   points: readonly ChartPoint[] | undefined,
   lastSampleAt: number | null,
-): LatestValue | null {
+): InstantValue | null {
   const last = points?.[points.length - 1];
   if (last === undefined) return null;
   return { value: last.v, t: last.t, current: lastSampleAt === null || last.t >= lastSampleAt };
@@ -72,7 +69,8 @@ export interface WindowStats {
   mean: number;
 }
 
-/** Minimo, maximo y promedio de lo que hay en la ventana (5 minutos). */
+/** Minimo, maximo y promedio de los puntos de una serie: en Tiempo Real, la
+ *  ventana de 5 minutos. */
 export function windowStats(points: readonly ChartPoint[] | undefined): WindowStats | null {
   if (points === undefined || points.length === 0) return null;
   let min = Infinity;
@@ -84,35 +82,4 @@ export function windowStats(points: readonly ChartPoint[] | undefined): WindowSt
     sum += v;
   }
   return { min, max, mean: sum / points.length };
-}
-
-/**
- * Si lo que se ve esta al dia:
- * - `connecting`: no hay conexion (primer intento o reintento).
- * - `idle`: no hay variables elegidas, asi que no llegan muestras y no hay
- *   nada que medir.
- * - `waiting`: conectado y con variables, sin ninguna muestra todavia.
- * - `stale`: paso mas de STALE_AFTER_MS desde la ultima muestra.
- * - `live`: al dia.
- *
- * Se mide con `receivedAt` (reloj del navegador) y no con el timestamp de la
- * muestra: un reloj del servidor desfasado daria falsas alarmas.
- */
-export type DataFreshness = "connecting" | "idle" | "waiting" | "stale" | "live";
-
-export function dataFreshness({
-  connection,
-  hasSelection,
-  receivedAt,
-  now,
-}: {
-  connection: WsStatus;
-  hasSelection: boolean;
-  receivedAt: number | null;
-  now: number;
-}): DataFreshness {
-  if (connection !== "open") return "connecting";
-  if (!hasSelection) return "idle";
-  if (receivedAt === null) return "waiting";
-  return now - receivedAt > STALE_AFTER_MS ? "stale" : "live";
 }

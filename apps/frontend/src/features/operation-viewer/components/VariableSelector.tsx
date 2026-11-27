@@ -4,7 +4,8 @@
 // a la mas vieja como hacia el prototipo (criterio de aceptacion de la 3.4).
 //
 // No guarda estado propio salvo el texto de busqueda: la seleccion es de la
-// pagina, que la pasa a useRealtimeSocket.
+// pagina, que decide de donde pedir los datos (WebSocket en Tiempo Real, REST
+// en el historico). Compartido entre las dos pantallas (tarea 5.3).
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ICheck, ISearch, IX } from "@/components/icons";
@@ -47,20 +48,20 @@ export function VariableSelector({
   return (
     <div className="card flex flex-col">
       <div className="px-4 py-3 border-b border-line">
-        <div className="font-semibold text-[14px]">{t("realtime.variables.title")}</div>
+        <div className="font-semibold text-[14px]">{t("viewer.variables.title")}</div>
         <div className="text-[11px] text-muted mt-0.5">
-          {t("realtime.variables.hint", { max: MAX_SELECTED_VARIABLES })}
+          {t("viewer.variables.hint", { max: MAX_SELECTED_VARIABLES })}
         </div>
       </div>
 
       {/* Seleccionadas: A y B con su color, y el boton para quitarlas */}
       <div className="px-4 py-3 border-b border-line">
         <div className="text-[11px] uppercase tracking-wider text-muted font-mono mb-2">
-          {t("realtime.variables.selected")} · {selection.length}/{MAX_SELECTED_VARIABLES}
+          {t("viewer.variables.selected")} · {selection.length}/{MAX_SELECTED_VARIABLES}
         </div>
         <div className="flex flex-wrap gap-1.5">
           {selection.length === 0 && (
-            <div className="text-[12px] text-muted italic">{t("realtime.variables.none")}</div>
+            <div className="text-[12px] text-muted italic">{t("viewer.variables.none")}</div>
           )}
           {selection.map((id, index) => {
             const series = seriesAt(index);
@@ -76,7 +77,7 @@ export function VariableSelector({
                   type="button"
                   onClick={() => toggle(id)}
                   className="ml-1 text-muted hover:text-[var(--ink)]"
-                  aria-label={t("realtime.variables.remove", { name })}
+                  aria-label={t("viewer.variables.remove", { name })}
                 >
                   <IX size={11} />
                 </button>
@@ -95,8 +96,8 @@ export function VariableSelector({
           <input
             className="field !pl-9"
             type="search"
-            placeholder={t("realtime.variables.search")}
-            aria-label={t("realtime.variables.search")}
+            placeholder={t("viewer.variables.search")}
+            aria-label={t("viewer.variables.search")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -104,17 +105,17 @@ export function VariableSelector({
       </div>
 
       <div className="overflow-y-auto max-h-[460px]">
-        {loading && <Notice>{t("realtime.variables.loading")}</Notice>}
+        {loading && <Notice>{t("viewer.variables.loading")}</Notice>}
         {failed && (
           <Notice>
-            {t("realtime.variables.loadError")}
+            {t("viewer.variables.loadError")}
             <button type="button" className="btn-ghost mt-3 block mx-auto" onClick={onRetry}>
-              {t("realtime.variables.retry")}
+              {t("viewer.variables.retry")}
             </button>
           </Notice>
         )}
         {catalog !== undefined && groups.length === 0 && (
-          <Notice>{t("realtime.variables.noResults")}</Notice>
+          <Notice>{t("viewer.variables.noResults")}</Notice>
         )}
 
         {groups.map((group) => (
@@ -136,7 +137,7 @@ export function VariableSelector({
                   aria-pressed={selected}
                   title={
                     disabled
-                      ? t("realtime.variables.limitReached", { max: MAX_SELECTED_VARIABLES })
+                      ? t("viewer.variables.limitReached", { max: MAX_SELECTED_VARIABLES })
                       : undefined
                   }
                   className={
@@ -157,7 +158,7 @@ export function VariableSelector({
                     <span className="block text-[13px] font-medium truncate">{variable.name}</span>
                     <span className="block text-[10px] text-muted font-mono">
                       {variable.id} · {formatRange(variable)}
-                      {variable.kind === "consigna" && ` · ${t("realtime.variables.setpoint")}`}
+                      {variable.kind === "consigna" && ` · ${t("viewer.variables.setpoint")}`}
                     </span>
                   </span>
                 </button>
@@ -169,7 +170,7 @@ export function VariableSelector({
 
       {full && (
         <div className="px-4 py-2.5 border-t border-line text-[11px] text-muted">
-          {t("realtime.variables.limitReached", { max: MAX_SELECTED_VARIABLES })}
+          {t("viewer.variables.limitReached", { max: MAX_SELECTED_VARIABLES })}
         </div>
       )}
     </div>
