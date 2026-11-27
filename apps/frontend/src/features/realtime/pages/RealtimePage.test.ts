@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import i18n from "@/i18n";
 import {
+  liveExportWindow,
   operationStartedAt,
   realtimeScreen,
   streamOperationId,
@@ -89,5 +90,30 @@ describe("realtimeScreen", () => {
     for (const key of KEYS) {
       expect(i18n.exists(key, { lng, ns: "common", fallbackLng: false }), key).toBe(true);
     }
+  });
+});
+
+describe("liveExportWindow (nombre del PNG en vivo)", () => {
+  const STARTED = "2026-11-27T12:00:00.000Z";
+  const at = (seconds: number) => Date.parse(STARTED) + seconds * 1000;
+
+  it("los ultimos 5 min hasta la ultima muestra, desde el inicio de la operacion", () => {
+    expect(liveExportWindow(STARTED, at(3600), 300_000)).toEqual({ start: 3300, end: 3600 });
+  });
+
+  it("no empieza antes de la operacion", () => {
+    expect(liveExportWindow(STARTED, at(120), 300_000)).toEqual({ start: 0, end: 120 });
+  });
+
+  it("acepta los timestamps del backend con microsegundos", () => {
+    expect(liveExportWindow("2026-11-27T12:00:00.123456+00:00", at(60), 300_000)?.end).toBeCloseTo(
+      59.877,
+    );
+  });
+
+  it("sin inicio o sin muestras no hay ventana", () => {
+    expect(liveExportWindow(null, at(60), 300_000)).toBeNull();
+    expect(liveExportWindow(STARTED, null, 300_000)).toBeNull();
+    expect(liveExportWindow("no es una fecha", at(60), 300_000)).toBeNull();
   });
 });

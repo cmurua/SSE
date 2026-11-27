@@ -126,24 +126,29 @@ def parse_variable_ids(raw: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(part.strip() for part in raw.split(",")))
 
 
-class OperationSamplesParams(BaseModel):
-    """Parametros de GET /historicals/operations/{operation_id}/samples.
+def validate_variable_ids(raw: str, limit: int | None = None) -> str:
+    """Comprueba la lista separada por comas de `variables`; devuelve `raw`."""
+    variable_ids = parse_variable_ids(raw)
+    if "" in variable_ids:
+        raise ValueError("`variables` no puede tener elementos vacios")
+    unknown = [v for v in variable_ids if v not in REACTOR_VARIABLES_BY_ID]
+    if unknown:
+        raise ValueError(f"Variables inexistentes: {', '.join(unknown)}")
+    if limit is not None and len(variable_ids) > limit:
+        raise ValueError(f"Se pueden pedir hasta {limit} variables a la vez")
+    return raw
 
-    `start` y `end` son segundos desde el inicio de la operacion y definen la
-    ventana [start, end). Sin `start`, la ventana arranca al inicio; sin
-    `end`, termina con la operacion. Un `end` posterior al cierre se recorta.
+
+class SampleWindowParams(BaseModel):
+    """La ventana [start, end) que comparten las series y el CSV.
+
+    `start` y `end` son segundos desde el inicio de la operacion. Sin `start`,
+    la ventana arranca al inicio; sin `end`, termina con la operacion. Un
+    `end` posterior al cierre se recorta.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    # Un solo parametro separado por comas (`variables=LOGA1,POTM4`) y no el
-    # parametro repetido: la URL queda corta y el orden es explicito.
-    variables: str = Field(
-        description=(
-            "IDs del catalogo separados por comas (GET /reactor-data/variables), "
-            f"hasta {MAX_SAMPLE_VARIABLES}."
-        ),
-    )
     # Sin `inf` ni `nan`: no son un instante de la operacion.
     start: float | None = Field(
         default=None,
@@ -157,6 +162,25 @@ class OperationSamplesParams(BaseModel):
         allow_inf_nan=False,
         description="Fin de la ventana (exclusivo), en segundos desde el inicio de la operacion.",
     )
+
+    @model_validator(mode="after")
+    def _start_before_end(self) -> "SampleWindowParams":
+        if self.start is not None and self.end is not None and self.start >= self.end:
+            raise ValueError("`start` tiene que ser anterior a `end`")
+        return self
+
+
+class OperationSamplesParams(SampleWindowParams):
+    """Parametros de GET /historicals/operations/{operation_id}/samples."""
+
+    # Un solo parametro separado por comas (`variables=LOGA1,POTM4`) y no el
+    # parametro repetido: la URL queda corta y el orden es explicito.
+    variables: str = Field(
+        description=(
+            "IDs del catalogo separados por comas (GET /reactor-data/variables), "
+            f"hasta {MAX_SAMPLE_VARIABLES}."
+        ),
+    )
     max_points: int = Field(
         default=DEFAULT_MAX_POINTS,
         ge=MIN_MAX_POINTS,
@@ -167,25 +191,39 @@ class OperationSamplesParams(BaseModel):
     @field_validator("variables")
     @classmethod
     def _known_variables(cls, value: str) -> str:
-        variable_ids = parse_variable_ids(value)
-        if "" in variable_ids:
-            raise ValueError("`variables` no puede tener elementos vacios")
-        unknown = [v for v in variable_ids if v not in REACTOR_VARIABLES_BY_ID]
-        if unknown:
-            raise ValueError(f"Variables inexistentes: {', '.join(unknown)}")
-        if len(variable_ids) > MAX_SAMPLE_VARIABLES:
-            raise ValueError(f"Se pueden pedir hasta {MAX_SAMPLE_VARIABLES} variables a la vez")
-        return value
-
-    @model_validator(mode="after")
-    def _start_before_end(self) -> "OperationSamplesParams":
-        if self.start is not None and self.end is not None and self.start >= self.end:
-            raise ValueError("`start` tiene que ser anterior a `end`")
-        return self
+        return validate_variable_ids(value, MAX_SAMPLE_VARIABLES)
 
     @property
     def variable_ids(self) -> tuple[str, ...]:
         return parse_variable_ids(self.variables)
+
+
+class OperationSamplesCsvParams(SampleWindowParams):
+    """Parametros de GET /historicals/operations/{operation_id}/samples.csv.
+
+    A diferencia de las series, sin tope de variables ni reduccion de puntos:
+    el CSV es la tabla completa de la ventana. Sin `variables` (o vacio) van
+    todas las del catalogo.
+    """
+
+    variables: str | None = Field(
+        default=None,
+        description=(
+            "IDs del catalogo separados por comas. Sin el, todas las variables del catalogo."
+        ),
+    )
+
+    @field_validator("variables")
+    @classmethod
+    def _known_variables(cls, value: str | None) -> str | None:
+        if value is None or value.strip() == "":
+            return None
+        return validate_variable_ids(value)
+
+    @property
+    def variable_ids(self) -> tuple[str, ...] | None:
+        """Las pedidas, o None si se pide el catalogo entero."""
+        return None if self.variables is None else parse_variable_ids(self.variables)
 
 
 class OperationSamples(BaseModel):

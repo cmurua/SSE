@@ -33,6 +33,15 @@ export interface OperationSamplesParams {
   max_points?: number;
 }
 
+/** Parametros de GET /historicals/operations/{id}/samples.csv. */
+export interface OperationSamplesCsvParams {
+  /** IDs del catalogo. Vacio = todas las variables del catalogo. */
+  variables: readonly string[];
+  /** Ventana [start, end) en segundos desde el inicio de la operacion. */
+  start?: number;
+  end?: number;
+}
+
 export const historicalsApi = {
   listOperations: (params: OperationListParams, options?: Omit<RequestOptions, "params">) =>
     httpClient.get<OperationPage>(ENDPOINTS.historicals.operations, {
@@ -53,4 +62,16 @@ export const historicalsApi = {
       ENDPOINTS.historicals.operationSamples(encodeURIComponent(operationId)),
       { ...options, params: { variables: variables.join(","), ...rest } },
     ),
+  /** El CSV de la ventana, sin reducir puntos (tarea 5.8). El backend deja
+   *  constancia de la descarga. Sin variables, `variables` no viaja y el
+   *  backend manda todas. */
+  downloadOperationSamplesCsv: (
+    operationId: string,
+    { variables, ...rest }: OperationSamplesCsvParams,
+    options?: Omit<RequestOptions, "params">,
+  ) =>
+    httpClient.getBlob(ENDPOINTS.historicals.operationSamplesCsv(encodeURIComponent(operationId)), {
+      ...options,
+      params: { variables: variables.length > 0 ? variables.join(",") : undefined, ...rest },
+    }),
 };

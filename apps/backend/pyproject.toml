@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "API del Sistema de Soporte a la Ensenanza del Reactor RA-0"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.115",
+    # >=0.118: desde esa version la sesion de get_db() (dependency con yield)
+    # se cierra despues de mandar la respuesta y no antes. El CSV de
+    # historicos (StreamingResponse) lee la base mientras se envia.
+    "fastapi>=0.118",
     "uvicorn[standard]>=0.30",
     "sqlalchemy>=2.0",
     "alembic>=1.13",

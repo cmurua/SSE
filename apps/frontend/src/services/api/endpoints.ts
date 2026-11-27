@@ -16,6 +16,8 @@ export const ENDPOINTS = {
     operation: (operationId: string) => `/historicals/operations/${operationId}`,
     operationSamples: (operationId: string) =>
       `/historicals/operations/${operationId}/samples`,
+    operationSamplesCsv: (operationId: string) =>
+      `/historicals/operations/${operationId}/samples.csv`,
   },
   reports: "/reports",
   exportsLog: "/exports/log",

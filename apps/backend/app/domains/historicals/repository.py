@@ -6,7 +6,7 @@
 # abierta: los usa un request REST, que dura lo que dura la sesion de get_db().
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -16,6 +16,10 @@ from sqlalchemy.orm import InstrumentedAttribute, Session
 from app.domains.historicals.models import Operation
 from app.domains.reactor_data.models import ReactorSample
 from app.domains.reactor_data.variable_catalog import sample_column
+
+# Filas por tanda al recorrer una ventana entera (CSV). Con 34 variables son
+# unas decenas de KB por tanda.
+STREAM_BATCH_SIZE = 1000
 
 
 @dataclass(frozen=True)
@@ -171,6 +175,35 @@ class SampleRepository:
             .order_by(ReactorSample.timestamp)
         ).all()
         return [tuple(row) for row in rows]
+
+    def stream_window(
+        self,
+        operation_id: str,
+        variable_ids: Sequence[str],
+        start: datetime,
+        end: datetime,
+        *,
+        batch_size: int = STREAM_BATCH_SIZE,
+    ) -> Iterator[tuple]:
+        """Como `raw_window`, pero de a `batch_size` filas.
+
+        `yield_per` abre un cursor del lado del servidor (psycopg 3): Postgres
+        manda las filas de a tandas y en memoria nunca hay mas que una. Asi el
+        CSV de una operacion entera no carga la tabla completa.
+        """
+        result = self._db.execute(
+            select(ReactorSample.timestamp, *_value_columns(variable_ids))
+            .where(_in_window(operation_id, start, end))
+            .order_by(ReactorSample.timestamp)
+            .execution_options(yield_per=batch_size)
+        )
+        try:
+            for row in result:
+                yield tuple(row)
+        finally:
+            # Si el cliente corta la descarga, el generador se cierra antes de
+            # agotar el cursor: hay que liberarlo en el servidor.
+            result.close()
 
     def averaged_window(
         self,

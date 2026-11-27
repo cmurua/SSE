@@ -5,10 +5,25 @@
 // Los calculos (escalas, marcas, trazados) estan en geometry.ts; aca solo se
 // dibuja. Los colores salen de clases de globals.css (chart-*, series-*), que
 // usan los tokens: no hay colores en este archivo.
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  forwardRef,
+  useEffect,
+  type ForwardedRef,
+  useId,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { seriesAt } from "../../series";
-import type { ChartRendererProps } from "../../types";
+import { svgChartToPng, type ImageLegendItem, type ImagePalette } from "../../svgImage";
+import {
+  ChartImageUnavailableError,
+  type ChartHandle,
+  type ChartRendererProps,
+  type ChartVariable,
+} from "../../types";
 import {
   computeTimeChart,
   computeXYChart,
@@ -42,15 +57,10 @@ function useElementWidth() {
   return [ref, width] as const;
 }
 
-export function PlaceholderChartAdapter({
-  variables,
-  data,
-  mode,
-  title,
-  height = DEFAULT_HEIGHT,
-  timeWindowMs,
-  timeDomain,
-}: ChartRendererProps) {
+function PlaceholderChart(
+  { variables, data, mode, title, height = DEFAULT_HEIGHT, timeWindowMs, timeDomain }: ChartRendererProps,
+  handleRef: ForwardedRef<ChartHandle>,
+) {
   const { t } = useTranslation("common");
   const [ref, width] = useElementWidth();
   const shown = variables.slice(0, 2);
@@ -97,6 +107,28 @@ export function PlaceholderChartAdapter({
     }
   }
 
+  // Exportar PNG (tarea 5.8): el <svg> que se ve, con la leyenda y el titulo
+  // que pide la pagina. Si en lugar del grafico hay un mensaje, no hay <svg>.
+  // Sin lista de dependencias: el handle se rehace en cada render y siempre
+  // ve el ancho, la leyenda y los ejes actuales.
+  useImperativeHandle(handleRef, () => ({
+    toImage: async (options) => {
+      const container = ref.current;
+      const svg = container?.querySelector<SVGSVGElement>(":scope > svg");
+      if (!container || !svg) throw new ChartImageUnavailableError();
+      return svgChartToPng(
+        svg,
+        { width, height },
+        {
+          title: options.title,
+          subtitle: options.subtitle,
+          legend: imageLegend(container, shown, axisLabels),
+          palette: imagePalette(container),
+        },
+      );
+    },
+  }));
+
   return (
     <div ref={ref} className="card overflow-hidden">
       {(title || shown.length > 0) && (
@@ -124,6 +156,42 @@ export function PlaceholderChartAdapter({
       {chart ?? <div style={{ height }}>{message}</div>}
     </div>
   );
+}
+
+/** Con `ref` expone el ChartHandle (toImage). */
+export const PlaceholderChartAdapter = forwardRef(PlaceholderChart);
+
+/** Valor de una variable CSS en `element`, ya resuelto. */
+function cssToken(element: Element, token: string, fallback: string): string {
+  return window.getComputedStyle(element).getPropertyValue(token).trim() || fallback;
+}
+
+/** Colores y fuente de la tarjeta, para el encabezado de la imagen. */
+function imagePalette(container: Element): ImagePalette {
+  return {
+    background: cssToken(container, "--surface", "#ffffff"),
+    ink: cssToken(container, "--ink", "#111111"),
+    muted: cssToken(container, "--muted", "#666666"),
+    fontFamily: window.getComputedStyle(container).fontFamily || "sans-serif",
+  };
+}
+
+/** La misma leyenda que en pantalla: A / B, nombre, unidad y eje. */
+function imageLegend(
+  container: Element,
+  shown: ChartVariable[],
+  axisLabels: string[],
+): ImageLegendItem[] {
+  return shown.map((variable, index) => {
+    const series = seriesAt(index);
+    return {
+      label: series?.label ?? "",
+      name: variable.name,
+      unit: variable.unit,
+      note: axisLabels[index],
+      color: series ? cssToken(container, series.token, "#000000") : "#000000",
+    };
+  });
 }
 
 function Message({ title, lead }: { title: string; lead?: string }) {
