@@ -4,7 +4,6 @@ import {
   appendSample,
   EMPTY_BUFFER,
   forOperation,
-  parseTimestamp,
   REALTIME_WINDOW_POINTS,
   retainVariables,
 } from "./realtimeBuffer";
@@ -30,11 +29,6 @@ describe("appendSample", () => {
   it("acepta timestamps con microsegundos, como los manda el backend", () => {
     const s = { operation_id: "OP-1", timestamp: "2026-11-18T12:00:00.512000Z", values: { A: 1 } };
     expect(appendSample(EMPTY_BUFFER, s, ["A"]).series.A[0].t).toBe(T0 + 512);
-  });
-
-  it("parseTimestamp recorta a milisegundos y acepta un timestamp sin decimales", () => {
-    expect(parseTimestamp("2026-11-18T12:00:00.512999Z")).toBe(T0 + 512);
-    expect(parseTimestamp("2026-11-18T12:00:00Z")).toBe(T0);
   });
 
   it("no crece mas alla de la ventana: descarta los puntos mas viejos", () => {

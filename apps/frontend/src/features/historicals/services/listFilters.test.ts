@@ -9,6 +9,7 @@ import {
   pageRange,
   pageToRedirect,
   parseListParams,
+  resultsStatus,
   shownRange,
   toApiParams,
   toSearchParams,
@@ -153,5 +154,23 @@ describe("formatos", () => {
     expect(formatDuration(0)).toBe("0h 00m");
     expect(formatDuration(125)).toBe("2h 05m");
     expect(formatDuration(null)).toBe("—");
+  });
+});
+
+describe("resultsStatus", () => {
+  const base = { isError: false, isFetching: false, hasData: false };
+
+  it("muestra el error cuando la query fallo y no se esta reintentando", () => {
+    expect(resultsStatus({ ...base, isError: true })).toBe("error");
+  });
+
+  it("al reintentar despues de un error muestra que esta cargando", () => {
+    expect(resultsStatus({ ...base, isError: true, isFetching: true })).toBe("loading");
+  });
+
+  it("cargando sin datos y lista con datos", () => {
+    expect(resultsStatus({ ...base, isFetching: true })).toBe("loading");
+    expect(resultsStatus({ ...base, hasData: true })).toBe("ready");
+    expect(resultsStatus({ ...base, hasData: true, isFetching: true })).toBe("ready");
   });
 });

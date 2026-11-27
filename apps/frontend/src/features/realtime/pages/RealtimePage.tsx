@@ -14,6 +14,7 @@ import { Link } from "react-router-dom";
 import { ChartRenderer } from "@/components/charts/ChartRenderer";
 import type { ChartMode, ChartVariable } from "@/components/charts/types";
 import { IAlert } from "@/components/icons";
+import { useVariableCatalog } from "@/hooks/useVariableCatalog";
 import type { ReactorView } from "@/store/reactorStateStore";
 import type { RealtimeError } from "@/types/realtime";
 import { ChartModeToggle } from "@/features/operation-viewer/components/ChartModeToggle";
@@ -28,7 +29,6 @@ import { LiveOperationStrip } from "../components/LiveOperationStrip";
 import { useLatencyProbe } from "../hooks/useLatencyProbe";
 import { useReactorState } from "../hooks/useReactorState";
 import { useRealtimeSocket, type RealtimeSnapshot } from "../hooks/useRealtimeSocket";
-import { useVariableCatalog } from "../hooks/useVariableCatalog";
 import { REALTIME_WINDOW_MS } from "../services/realtimeBuffer";
 
 export type RealtimeScreen = "available" | "unavailable" | "unknown" | "loading";

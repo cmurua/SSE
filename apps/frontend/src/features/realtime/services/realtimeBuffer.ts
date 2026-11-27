@@ -6,6 +6,7 @@
 // grafico (tareas 3.5 y 3.6).
 import type { ChartPoint } from "@/components/charts/types";
 import type { RealtimeSample } from "@/types/realtime";
+import { parseTimestamp } from "@/features/operation-viewer/services/samples";
 
 /** Puntos por variable: 5 minutos a 1 Hz. Pasado eso se descartan los mas
  *  viejos, para que una operacion larga no haga crecer la memoria. */
@@ -24,15 +25,6 @@ export interface RealtimeBuffer {
 }
 
 export const EMPTY_BUFFER: RealtimeBuffer = { operationId: null, series: {}, lastSampleAt: null };
-
-/** Epoch ms de un timestamp ISO del backend. Pydantic manda microsegundos
- *  (`.512000Z`), pero el formato que el estandar obliga a aceptar a
- *  Date.parse tiene exactamente 3 decimales: con mas, depende del navegador.
- *  Se recorta a milisegundos para no perder todas las muestras en uno que
- *  devuelva NaN. */
-export function parseTimestamp(iso: string): number {
-  return Date.parse(iso.replace(/(\.\d{3})\d+/, "$1"));
-}
 
 /** El buffer listo para `operationId`: el mismo si ya es de esa operacion, uno
  *  vacio si no. Los datos de una operacion nunca se mezclan con los de otra. */
