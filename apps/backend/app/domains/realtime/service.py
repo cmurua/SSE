@@ -10,8 +10,9 @@
 # "El reactor esta operando" lo decide ReactorStateService y no se recalcula
 # aca: este servicio solo le pregunta (ver docs/architecture/overview.md).
 #
-# Cada cliente elige que variables recibir y recibe SOLO esas: una muestra
-# completa son 34 senales por segundo y la pantalla muestra dos.
+# Cada cliente elige que variables recibir y recibe esas mas las que se
+# mandan siempre (ALWAYS_SENT_VARIABLES): una muestra completa son 34 senales
+# por segundo, y la pantalla grafica dos y muestra el panel del nucleo aparte.
 from __future__ import annotations
 
 import json
@@ -23,6 +24,7 @@ from pydantic import ValidationError
 
 from app.domains.reactor_data.acquisition import AcquiredSample
 from app.domains.reactor_data.variable_catalog import (
+    REACTOR_VARIABLES,
     REACTOR_VARIABLES_BY_ID,
     sample_column,
 )
@@ -43,6 +45,21 @@ logger = logging.getLogger(__name__)
 # backend lo repite porque es tambien el tope de lo que se envia por cliente.
 MAX_SUBSCRIBED_VARIABLES = 2
 
+# Lo que viaja en todas las muestras, sin pedirlo y sin contar en
+# MAX_SUBSCRIBED_VARIABLES: el panel del nucleo de la pantalla de tiempo real
+# (tarea 5.4), que se ve junto al grafico sea cual sea la seleccion.
+# - Las barras de control, por grupo y no por ID, para que una barra nueva en
+#   el catalogo llegue sin tocar este archivo.
+# - El nivel de moderador en el nucleo, para el tanque del panel. Es el mismo
+#   ID que MODERATOR_LEVEL_ID en el frontend
+#   (features/operation-viewer/services/controlBars.ts).
+ALWAYS_SENT_GROUPS = ("SBC",)
+MODERATOR_LEVEL = "NN1"
+ALWAYS_SENT_VARIABLES = (
+    *(v["id"] for v in REACTOR_VARIABLES if v["group"] in ALWAYS_SENT_GROUPS),
+    MODERATOR_LEVEL,
+)
+
 NOT_OPERATING_REASON = "El reactor no esta en operacion"
 OPERATION_ENDED_REASON = "La operacion termino"
 
@@ -60,10 +77,12 @@ class RealtimeService:
         reactor_state: ReactorStateReader,
         manager: ConnectionManager,
         max_variables: int = MAX_SUBSCRIBED_VARIABLES,
+        always_sent: tuple[str, ...] = ALWAYS_SENT_VARIABLES,
     ) -> None:
         self._reactor_state = reactor_state
         self._manager = manager
         self._max_variables = max_variables
+        self._always_sent = always_sent
         # Seleccion de cada cliente conectado, en el orden en que la pidio.
         # El registro de conexiones es del manager; esto es solo lo que cada
         # una quiere recibir.
@@ -83,9 +102,10 @@ class RealtimeService:
     async def serve(self, websocket: WebSocket) -> None:
         """Atiende una conexion de realtime.samples hasta que se cierra.
 
-        Arranca sin variables: el cliente recibe `subscribed` con la operacion
-        en curso y despues elige con `subscribe`. Con el reactor detenido se
-        cierra con REACTOR_NOT_OPERATING sin suscribir.
+        Arranca sin variables elegidas: el cliente recibe `subscribed` con la
+        operacion en curso (y ya recibe las que se mandan siempre) y despues
+        elige con `subscribe`. Con el reactor detenido se cierra con
+        REACTOR_NOT_OPERATING sin suscribir.
         """
         try:
             await self._manager.serve(
@@ -113,7 +133,7 @@ class RealtimeService:
             )
         self._subscriptions[websocket] = ()
         self._operations[websocket] = state.operation_id
-        return _subscribed_event(state.operation_id, ())
+        return self._subscribed_event(state.operation_id, ())
 
     async def _on_client_message(self, websocket: WebSocket, text: str) -> None:
         try:
@@ -148,7 +168,23 @@ class RealtimeService:
         # valido la reemplaza.
         self._subscriptions[websocket] = variables
         await self._manager.send(
-            websocket, _subscribed_event(self._operations[websocket], variables)
+            websocket, self._subscribed_event(self._operations[websocket], variables)
+        )
+
+    def _sent_variables(self, selection: tuple[str, ...]) -> tuple[str, ...]:
+        """Lo que recibe un cliente: su seleccion, en su orden, y despues las
+        que se mandan siempre. Una variable elegida que tambien se manda
+        siempre va una sola vez."""
+        return selection + tuple(v for v in self._always_sent if v not in selection)
+
+    def _subscribed_event(self, operation_id: str, variables: tuple[str, ...]) -> dict:
+        return build_event(
+            WSEventType.SUBSCRIBED,
+            RealtimeSubscription(
+                operation_id=operation_id,
+                variables=list(variables),
+                always_variables=list(self._always_sent),
+            ),
         )
 
     async def _reply_error(self, websocket: WebSocket, code: str, message: str) -> None:
@@ -160,23 +196,28 @@ class RealtimeService:
     async def publish_sample(self, sample: AcquiredSample) -> None:
         """Listener de AcquisitionService: reparte una muestra recien guardada.
 
-        Cada cliente recibe solo sus variables. El mensaje se arma una vez por
-        seleccion distinta, no por cliente: con 100 clientes mirando las
-        mismas dos variables se serializa una sola vez.
+        Cada cliente recibe sus variables y las que se mandan siempre. El
+        mensaje se arma una vez por seleccion distinta, no por cliente: con
+        100 clientes mirando las mismas variables se serializa una sola vez.
         """
         if not self._subscriptions:
             return
 
-        by_selection: dict[frozenset[str], dict] = {}
+        # Por tupla y no por conjunto: dos selecciones con las mismas
+        # variables en otro orden son mensajes distintos (el orden de
+        # `values` es el de la seleccion, ver websocket-protocol.md).
+        by_selection: dict[tuple[str, ...], dict] = {}
 
         def message_for(websocket: WebSocket) -> dict | None:
-            variables = self._subscriptions.get(websocket)
+            selection = self._subscriptions.get(websocket)
+            if selection is None:
+                return None
+            variables = self._sent_variables(selection)
             if not variables:
                 return None
-            key = frozenset(variables)
-            event = by_selection.get(key)
+            event = by_selection.get(variables)
             if event is None:
-                event = by_selection[key] = build_event(
+                event = by_selection[variables] = build_event(
                     WSEventType.SAMPLE,
                     RealtimeSample(
                         operation_id=sample.operation_id,
@@ -206,10 +247,3 @@ class RealtimeService:
             WSCloseCode.REACTOR_NOT_OPERATING,
             OPERATION_ENDED_REASON,
         )
-
-
-def _subscribed_event(operation_id: str, variables: tuple[str, ...]) -> dict:
-    return build_event(
-        WSEventType.SUBSCRIBED,
-        RealtimeSubscription(operation_id=operation_id, variables=list(variables)),
-    )

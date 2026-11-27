@@ -19,7 +19,8 @@ class SubscribeMessage(BaseModel):
     """Reemplaza la seleccion de variables del cliente.
 
     Es la seleccion completa y no un agregado: mandar `[]` deja de recibir
-    muestras sin cortar la conexion. Asi el cliente no tiene que llevar la
+    las variables elegidas sin cortar la conexion (las de `always_variables`
+    siguen llegando). Asi el cliente no tiene que llevar la
     cuenta de que pidio antes.
     """
 
@@ -34,15 +35,19 @@ class RealtimeSubscription(BaseModel):
     """`data` de `subscribed`: la seleccion vigente y la operacion en curso.
 
     Se manda al conectarse (con `variables` vacio) y como respuesta a cada
-    `subscribe` aceptado.
+    `subscribe` aceptado. `always_variables` son las que viajan en todas las
+    muestras sin pedirlas ni contar en el tope de `variables` (hoy, las
+    barras de control).
     """
 
     operation_id: str
     variables: list[str]
+    always_variables: list[str]
 
 
 class RealtimeSample(BaseModel):
-    """`data` de `sample`: una muestra recortada a la seleccion del cliente.
+    """`data` de `sample`: una muestra recortada a la seleccion del cliente
+    mas `always_variables`.
 
     `values` va por ID del catalogo (GET /reactor-data/variables), no por
     columna de la base. `null` = el canal no publico nada en esa muestra,

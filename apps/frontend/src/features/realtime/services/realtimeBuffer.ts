@@ -42,9 +42,10 @@ export function forOperation(buffer: RealtimeBuffer, operationId: string): Realt
 }
 
 /**
- * Agrega una muestra. Solo guarda las variables de `selection`: el servidor
- * puede mandar una muestra con la seleccion anterior despues de que el
- * cliente pidio otra, y esa variable no tiene que reaparecer.
+ * Agrega una muestra. Solo guarda las variables de `selection` (las elegidas
+ * y las que el servidor manda siempre): el servidor puede mandar una muestra
+ * con la seleccion anterior despues de que el cliente pidio otra, y esa
+ * variable no tiene que reaparecer.
  *
  * Un valor `null` no se guarda: dibujarlo como 0 seria inventar una caida.
  * Una muestra que no es posterior a la ultima de la serie (repetida o

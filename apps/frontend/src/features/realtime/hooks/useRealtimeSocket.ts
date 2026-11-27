@@ -36,8 +36,11 @@ export interface RealtimeSnapshot {
   /** Seleccion que el servidor confirmo. Puede ir un instante detras de la
    *  pedida, o quedar en la anterior si el pedido fue rechazado (`error`). */
   confirmed: string[];
-  /** Ultimos REALTIME_WINDOW_POINTS puntos de cada variable elegida, ordenados
-   *  por tiempo. Forma de ChartRendererProps.data. */
+  /** Variables que el servidor manda en todas las muestras sin pedirlas
+   *  (`always_variables` de `subscribed`): las barras de control. */
+  always: string[];
+  /** Ultimos REALTIME_WINDOW_POINTS puntos de cada variable elegida y de las
+   *  de `always`, ordenados por tiempo. Forma de ChartRendererProps.data. */
   series: Record<string, ChartPoint[]>;
   /** `timestamp` de la ultima muestra (epoch ms, reloj del servidor). */
   lastSampleAt: number | null;
@@ -52,6 +55,7 @@ export const IDLE_SNAPSHOT: RealtimeSnapshot = {
   connection: "closed",
   operationId: null,
   confirmed: [],
+  always: [],
   series: {},
   lastSampleAt: null,
   receivedAt: null,
@@ -98,6 +102,7 @@ export function createRealtimeSession(
   let connection: WsStatus = "closed";
   let selection: string[] = [];
   let confirmed: string[] = [];
+  let always: string[] = [];
   let buffer: RealtimeBuffer = EMPTY_BUFFER;
   let receivedAt: number | null = null;
   let error: RealtimeError | null = null;
@@ -113,6 +118,7 @@ export function createRealtimeSession(
       connection,
       operationId: buffer.operationId,
       confirmed,
+      always,
       series: buffer.series,
       lastSampleAt: buffer.lastSampleAt,
       receivedAt,
@@ -126,6 +132,11 @@ export function createRealtimeSession(
     cancelFlush = schedule(flush);
   }
 
+  /** Lo que se guarda: lo elegido y lo que el servidor manda siempre. */
+  function kept(): string[] {
+    return [...selection, ...always.filter((id) => !selection.includes(id))];
+  }
+
   function sendSelection(): void {
     client.send(buildSubscribeMessage(selection));
   }
@@ -136,7 +147,7 @@ export function createRealtimeSession(
         case WS_EVENT_TYPES.SAMPLE: {
           const sample = parseSample(event.data);
           if (sample === null) return;
-          const next = appendSample(buffer, sample, selection);
+          const next = appendSample(buffer, sample, kept());
           if (next === buffer) return;
           buffer = next;
           receivedAt = now();
@@ -150,6 +161,10 @@ export function createRealtimeSession(
           // grafico muestra el hueco (el eje X es el timestamp).
           buffer = forOperation(buffer, subscription.operation_id);
           confirmed = subscription.variables;
+          if (!sameList(always, subscription.always_variables)) {
+            always = subscription.always_variables;
+            buffer = retainVariables(buffer, kept());
+          }
           error = null;
           break;
         }
@@ -189,7 +204,7 @@ export function createRealtimeSession(
     setVariables(variables) {
       if (disposed || sameList(variables, selection)) return;
       selection = [...variables];
-      buffer = retainVariables(buffer, selection);
+      buffer = retainVariables(buffer, kept());
       // Si no esta abierta, la seleccion se manda al abrir (onStatusChange).
       if (client.status === "open") sendSelection();
       changed();

@@ -12,8 +12,8 @@ function sampleEvent(second: number, values: Record<string, number | null>, oper
   };
 }
 
-function subscribedEvent(variables: string[], operation_id = "OP-1") {
-  return { type: "subscribed", data: { operation_id, variables } };
+function subscribedEvent(variables: string[], operation_id = "OP-1", always_variables: string[] = []) {
+  return { type: "subscribed", data: { operation_id, variables, always_variables } };
 }
 
 function sentMessages(ws: FakeWebSocket): unknown[] {
@@ -224,7 +224,74 @@ describe("createRealtimeSession", () => {
     ws.serverSend({ type: "sample", data: { operation_id: "OP-1", values: { A: 1 } } });
     ws.serverSend({ type: "sample", data: { ...sampleEvent(0, {}).data, values: { A: "1" } } });
     ws.serverSend({ type: "subscribed", data: { operation_id: "OP-1" } });
+    ws.serverSend({
+      type: "subscribed",
+      data: { operation_id: "OP-1", variables: [], always_variables: "BC1" },
+    });
     expect(scheduler.pending).toBe(false);
+  });
+
+  // --- Barras de control: el servidor las manda siempre (tarea 5.4) ---------
+
+  it("guarda las variables que el servidor manda siempre, sin pedirlas", () => {
+    const { session, scheduler } = setup();
+    session.setVariables(["A"]);
+    session.start();
+    const ws = FakeWebSocket.last();
+    ws.serverOpen();
+    ws.serverSend(subscribedEvent(["A"], "OP-1", ["BC1", "BC2"]));
+    ws.serverSend(sampleEvent(0, { A: 1, BC1: 10, BC2: 20 }));
+    scheduler.frame();
+
+    expect(sentMessages(ws)).toEqual([{ type: "subscribe", variables: ["A"] }]);
+    expect(session.getSnapshot()).toMatchObject({
+      confirmed: ["A"],
+      always: ["BC1", "BC2"],
+      series: { A: [{ t: T0, v: 1 }], BC1: [{ t: T0, v: 10 }], BC2: [{ t: T0, v: 20 }] },
+    });
+  });
+
+  it("sin variables elegidas igual guarda las que llegan siempre", () => {
+    const { session, scheduler } = setup();
+    session.start();
+    const ws = FakeWebSocket.last();
+    ws.serverOpen();
+    ws.serverSend(subscribedEvent([], "OP-1", ["BC1"]));
+    ws.serverSend(sampleEvent(0, { BC1: 10 }));
+    scheduler.frame();
+
+    expect(ws.sent).toHaveLength(0);
+    expect(session.getSnapshot().series).toEqual({ BC1: [{ t: T0, v: 10 }] });
+  });
+
+  it("cambiar la seleccion conserva las que llegan siempre", () => {
+    const { session, scheduler } = setup();
+    session.setVariables(["A", "BC1"]);
+    session.start();
+    const ws = FakeWebSocket.last();
+    ws.serverOpen();
+    ws.serverSend(subscribedEvent(["A", "BC1"], "OP-1", ["BC1", "BC2"]));
+    ws.serverSend(sampleEvent(0, { A: 1, BC1: 10, BC2: 20 }));
+
+    // BC1 deja de estar en el grafico pero sigue en el panel.
+    session.setVariables(["B"]);
+    scheduler.frame();
+
+    expect(Object.keys(session.getSnapshot().series).sort()).toEqual(["BC1", "BC2"]);
+  });
+
+  it("acepta un subscribed sin always_variables (servidor anterior)", () => {
+    const { session, scheduler } = setup();
+    session.setVariables(["A"]);
+    session.start();
+    const ws = FakeWebSocket.last();
+    ws.serverOpen();
+    ws.serverSend({ type: "subscribed", data: { operation_id: "OP-1", variables: ["A"] } });
+    ws.serverSend(sampleEvent(0, { A: 1, BC1: 10 }));
+    scheduler.frame();
+
+    expect(session.getSnapshot()).toMatchObject({ always: [], series: { A: [{ t: T0, v: 1 }] } });
+    expect(session.getSnapshot().series.BC1).toBeUndefined();
   });
 
   it("dispose cierra el socket y no vuelve a avisar", () => {

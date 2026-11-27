@@ -381,3 +381,81 @@ input[type="range"] {
 .bg-warn {
   background-color: var(--warn);
 }
+
+/* Panel de barras de control (operation-viewer/components/ControlBarsPanel).
+   Puerto de ControlBarGauge (ControlBarsPanel.jsx). El color de cada barra
+   sale de su rango (services/controlBars.ts::barTone) y se aplica con una
+   variable: el modificador de opacidad de Tailwind no funciona con
+   variables CSS, de ahi las clases propias. */
+.rod-tone-none {
+  --rod-color: var(--muted);
+}
+.rod-tone-low {
+  --rod-color: var(--accent);
+}
+.rod-tone-mid {
+  --rod-color: var(--warn);
+}
+.rod-tone-high {
+  --rod-color: var(--bad);
+}
+.rod-tone-text {
+  color: var(--rod-color);
+}
+.rod-channel {
+  border: 1px solid var(--line-2);
+  background: linear-gradient(180deg, var(--surface-hover) 0%, var(--bg-2) 100%);
+}
+.rod-tick {
+  border-top: 1px solid color-mix(in srgb, var(--line-2) 60%, transparent);
+}
+.rod-fill {
+  background: var(--rod-color);
+  opacity: 0.85;
+}
+.rod-hatch {
+  background-image: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 2px, transparent 2px 8px);
+  opacity: 0.55;
+}
+.rod-core {
+  background: color-mix(in srgb, var(--ink-2) 85%, transparent);
+  border-top: 1px solid rgba(0, 0, 0, 0.3);
+}
+/* Tanque de nivel de moderador (ModeratorGauge en ControlBarsPanel.jsx). El
+   color del valor sale del estado (services/controlBars.ts::moderatorStatus). */
+.mod-status-none {
+  --mod-color: var(--muted);
+}
+.mod-status-nominal {
+  --mod-color: var(--good);
+}
+.mod-status-low {
+  --mod-color: var(--warn);
+}
+.mod-status-critical {
+  --mod-color: var(--bad);
+}
+.mod-status-text {
+  color: var(--mod-color);
+}
+.mod-tank {
+  border: 1px solid var(--line-2);
+  background: var(--surface-hover);
+}
+.mod-fill {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 85%, transparent),
+    color-mix(in srgb, var(--accent) 55%, transparent)
+  );
+}
+.mod-ripple {
+  background: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--surface) 60%, transparent) 0 3px,
+    transparent 3px 7px
+  );
+}
+.mod-grid {
+  border-top: 1px solid color-mix(in srgb, var(--line-2) 50%, transparent);
+}

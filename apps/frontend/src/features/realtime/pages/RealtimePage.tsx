@@ -17,9 +17,11 @@ import { IAlert } from "@/components/icons";
 import type { ReactorView } from "@/store/reactorStateStore";
 import type { RealtimeError } from "@/types/realtime";
 import { ChartModeToggle } from "@/features/operation-viewer/components/ChartModeToggle";
+import { ControlBarsPanel } from "@/features/operation-viewer/components/ControlBarsPanel";
 import { InstantValuePanel } from "@/features/operation-viewer/components/InstantValuePanel";
 import { VariableSelector } from "@/features/operation-viewer/components/VariableSelector";
 import { displayedChartMode } from "@/features/operation-viewer/services/chartMode";
+import { latestSnapshot, panelVariableIds } from "@/features/operation-viewer/services/controlBars";
 import { latestValue, type InstantValue } from "@/features/operation-viewer/services/instantValues";
 import { DEFAULT_SELECTION } from "@/features/operation-viewer/services/variableSelection";
 import { LiveOperationStrip } from "../components/LiveOperationStrip";
@@ -146,6 +148,13 @@ function RealtimeAvailable({
     }
     return values;
   }, [selectedVariables, realtime.series, realtime.lastSampleAt]);
+  // Las barras de control y el nivel de moderador no se piden: el servidor
+  // los manda en todas las muestras, aparte de las 2 elegidas para el
+  // grafico (tarea 5.4). El panel muestra la ultima muestra.
+  const controlBarsSnapshot = useMemo(
+    () => latestSnapshot(panelVariableIds(catalog.data), realtime.series, realtime.lastSampleAt),
+    [catalog.data, realtime.series, realtime.lastSampleAt],
+  );
 
   return (
     <div className="grid grid-cols-12 gap-5">
@@ -164,11 +173,13 @@ function RealtimeAvailable({
           operationId={operationId}
           startedAt={startedAt}
           connection={realtime.connection}
-          hasSelection={selection.length > 0}
+          // Con el panel del nucleo llegan muestras aunque no haya nada elegido.
+          hasSelection={selection.length > 0 || realtime.always.length > 0}
           lastSampleAt={realtime.lastSampleAt}
           receivedAt={realtime.receivedAt}
         />
         {realtime.error && <SubscribeError error={realtime.error} />}
+        <ControlBarsPanel catalog={catalog.data} snapshot={controlBarsSnapshot} />
         <ChartModeToggle
           mode={mode}
           xyAvailable={chartVariables.length >= 2}
